@@ -8,6 +8,7 @@ import {
     Polyline,
     Popup,
     TileLayer,
+    Tooltip,
     useMap,
 } from "react-leaflet";
 
@@ -19,85 +20,92 @@ import markerShadow from "leaflet/dist/images/marker-shadow.png";
 
 import { useEffect } from "react";
 
-import type {
-    CVRPNode,
-    VehicleRoute,
-} from "../types/cvrp";
-/* =========================================
-   FIX DEFAULT LEAFLET ICONS
-========================================= */
+import type { Node } from "../types/cvrp";
 
+/* ────────────────────────────────────────────────────────────
+   Fix Leaflet default icons
+──────────────────────────────────────────────────────────── */
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 
 L.Icon.Default.mergeOptions({
     iconRetinaUrl: markerIcon2x,
-
     iconUrl: markerIcon,
-
     shadowUrl: markerShadow,
 });
-/* =========================================
-   DEFAULT CENTER
-========================================= */
+
+/* ────────────────────────────────────────────────────────────
+   Icons
+──────────────────────────────────────────────────────────── */
+
+/* Depot → red marker */
+const depotIcon = new L.Icon({
+    iconUrl:
+        "https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png",
+
+    iconSize: [26, 26],
+    iconAnchor: [13, 26],
+    popupAnchor: [0, -24],
+});
+
+/* Pickup → green marker (same style as old project) */
+const pickupIcon = new L.Icon({
+    iconUrl:
+        "https://maps.gstatic.com/mapfiles/ms2/micons/green-dot.png",
+
+    iconSize: [24, 24],
+    iconAnchor: [12, 24],
+    popupAnchor: [0, -22],
+});
+
+/* ────────────────────────────────────────────────────────────
+   Route palettes
+──────────────────────────────────────────────────────────── */
+
+const WARM = [
+    "#f97316",
+    "#f59e0b",
+    "#ef4444",
+    "#fb923c",
+    "#fbbf24",
+];
+
+const COOL = [
+    "#14b8a6",
+    "#06b6d4",
+    "#3b82f6",
+    "#6366f1",
+    "#8b5cf6",
+];
+
+/* ────────────────────────────────────────────────────────────
+   Default map center
+──────────────────────────────────────────────────────────── */
 
 const DEFAULT_CENTER: [number, number] = [
     12.9716,
     77.5946,
 ];
 
-/* =========================================
-   MARKER ICONS
-========================================= */
-
-const depotIcon = new L.Icon({
-    iconUrl:
-        "https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png",
-
-    iconSize: [28, 28],
-});
-
-const pickupIcon = new L.Icon({
-    iconUrl:
-        "https://maps.gstatic.com/mapfiles/ms2/micons/green-dot.png",
-
-    iconSize: [24, 24],
-});
-
-/* =========================================
-   ROUTE COLORS
-========================================= */
-
-const ROUTE_COLORS = [
-    "#14b8a6",
-    "#06b6d4",
-    "#0ea5e9",
-    "#8b5cf6",
-    "#f97316",
-    "#22c55e",
-    "#f43f5e",
-];
-
-/* =========================================
-   AUTO FIT BOUNDS
-========================================= */
+/* ────────────────────────────────────────────────────────────
+   Auto fit bounds
+──────────────────────────────────────────────────────────── */
 
 function FitBounds({
     nodes,
 }: {
-    nodes: CVRPNode[];
+    nodes: Node[];
 }) {
     const map = useMap();
 
     useEffect(() => {
         if (!nodes.length) {
             map.setView(DEFAULT_CENTER, 11);
-
             return;
         }
 
-        const points = nodes.map((node) => [
-            node.lat,
-            node.lng,
+        const points = nodes.map((n) => [
+            n.lat,
+            n.lng,
         ]) as [number, number][];
 
         map.fitBounds(points, {
@@ -108,25 +116,36 @@ function FitBounds({
     return null;
 }
 
-/* =========================================
-   MAIN MAP
-========================================= */
+/* ────────────────────────────────────────────────────────────
+   Props
+──────────────────────────────────────────────────────────── */
 
 interface SolverMapProps {
-    nodes: CVRPNode[];
-
-    routes: VehicleRoute[];
-
-    accent?: "orange" | "teal";
+    nodes: Node[];
+    routes: number[][];
+    palette?: "warm" | "cool";
+    activeVehicleIdx?: number | null;
 }
+
+/* ────────────────────────────────────────────────────────────
+   Component
+──────────────────────────────────────────────────────────── */
 
 export default function SolverMap({
     nodes,
     routes,
-    accent = "teal",
+    palette = "cool",
+    activeVehicleIdx = null,
 }: SolverMapProps) {
-    function getNodeById(id: number) {
-        return nodes.find((node) => node.id === id);
+    const colors =
+        palette === "warm"
+            ? WARM
+            : COOL;
+
+    function getNode(id: number) {
+        return nodes.find(
+            (n) => n.id === id
+        );
     }
 
     return (
@@ -138,96 +157,142 @@ export default function SolverMap({
                 height: "100%",
             }}
         >
-            {/* ===================================== */}
-            {/* MAP TILES */}
-            {/* ===================================== */}
-
             <TileLayer
                 attribution="© OpenStreetMap"
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-            {/* ===================================== */}
-            {/* AUTO FIT */}
-            {/* ===================================== */}
-
             <FitBounds nodes={nodes} />
 
-            {/* ===================================== */}
-            {/* MARKERS */}
-            {/* ===================================== */}
+            {/* ─────────────────────────────────────
+          Markers
+      ───────────────────────────────────── */}
 
-            {nodes.map((node) => (
-                <Marker
-                    key={node.id}
-                    position={[node.lat, node.lng]}
-                    icon={
-                        node.isDepot
-                            ? depotIcon
-                            : pickupIcon
-                    }
-                >
-                    <Popup>
-                        <div className="text-sm">
-                            <strong>
-                                {node.label}
-                            </strong>
-
-                            <br />
-
-                            Demand: {node.demand}
-
-                            <br />
-
-                            {node.isDepot
-                                ? "Depot"
-                                : "Pickup Node"}
-                        </div>
-                    </Popup>
-                </Marker>
-            ))}
-
-            {/* ===================================== */}
-            {/* ROUTES */}
-            {/* ===================================== */}
-
-            {routes.map((route, index) => {
-                const color =
-                    ROUTE_COLORS[
-                    index % ROUTE_COLORS.length
-                    ];
-
-                const coordinates = route.route
-                    .map((nodeId) => {
-                        const node =
-                            getNodeById(nodeId);
-
-                        if (!node) return null;
-
-                        return [
-                            node.lat,
-                            node.lng,
-                        ] as [number, number];
-                    })
-                    .filter(Boolean) as [
-                        number,
-                        number
-                    ][];
+            {nodes.map((node) => {
+                const isDepot =
+                    node.id === 0;
 
                 return (
-                    <Polyline
-                        key={route.vehicleId}
-                        positions={coordinates}
-                        pathOptions={{
-                            color,
+                    <Marker
+                        key={node.id}
+                        position={[
+                            node.lat,
+                            node.lng,
+                        ]}
+                        icon={
+                            isDepot
+                                ? depotIcon
+                                : pickupIcon
+                        }
+                    >
 
-                            weight: 4,
 
-                            opacity: 0.85,
-                        }}
-                    />
+                        <Popup>
+                            {isDepot ? (
+                                <div>
+                                    <strong>
+                                        Depot
+                                    </strong>
+                                </div>
+                            ) : (
+                                <div
+                                    style={{
+                                        fontSize:
+                                            13,
+                                    }}
+                                >
+                                    <strong>
+                                        Pickup{" "}
+                                        {node.id}
+                                    </strong>
+
+                                    <br />
+
+                                    load:{" "}
+                                    <strong>
+                                        {node.load}
+                                    </strong>
+                                </div>
+                            )}
+                        </Popup>
+                    </Marker>
                 );
             })}
+
+            {/* ─────────────────────────────────────
+          Routes
+      ───────────────────────────────────── */}
+
+            {routes.map(
+                (
+                    route,
+                    vehicleIdx
+                ) => {
+                    const color =
+                        colors[
+                        vehicleIdx %
+                        colors.length
+                        ];
+
+                    const isActive =
+                        activeVehicleIdx ===
+                        null ||
+                        activeVehicleIdx ===
+                        vehicleIdx;
+
+                    const opacity =
+                        isActive
+                            ? 0.9
+                            : 0.15;
+
+                    const positions =
+                        route
+                            .map((id) => {
+                                const node =
+                                    getNode(id);
+
+                                return node
+                                    ? ([
+                                        node.lat,
+                                        node.lng,
+                                    ] as [
+                                            number,
+                                            number
+                                        ])
+                                    : null;
+                            })
+                            .filter(
+                                Boolean
+                            ) as [
+                                number,
+                                number
+                            ][];
+
+                    return (
+                        <Polyline
+                            key={
+                                vehicleIdx
+                            }
+                            positions={
+                                positions
+                            }
+                            pathOptions={{
+                                color,
+
+                                weight: 4,
+
+                                opacity,
+
+                                lineCap:
+                                    "round",
+
+                                lineJoin:
+                                    "round",
+                            }}
+                        />
+                    );
+                }
+            )}
         </MapContainer>
     );
 }

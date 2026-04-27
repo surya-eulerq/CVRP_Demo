@@ -3,312 +3,141 @@
 import { create } from "zustand";
 
 import type {
-    ComparisonMetrics,
-    ComparisonState,
-    CVRPNode,
-    GenerateFormData,
+    Node,
+    CVRPInstance,
     InputMode,
-    MapViewport,
-    SolverResult,
-    ValidationError,
+    BaselineName,
+    SolveMetrics,
+    RouteAssignment,
 } from "../types/cvrp";
 
-interface ComparisonStore extends ComparisonState {
-    // ======================================
-    // MODE
-    // ======================================
-
+// ─────────────────────────────────────────────────────────────
+// Store shape
+// ─────────────────────────────────────────────────────────────
+interface ComparisonStore {
+    // ── Input mode ────────────────────────────────────────────
+    inputMode: InputMode;
     setInputMode: (mode: InputMode) => void;
 
-    setBaselineSolver: (solver: "naive" | "greedy") => void;
+    // ── Baseline solver toggle ────────────────────────────────
+    baselineSolver: BaselineName;
+    setBaselineSolver: (solver: BaselineName) => void;
 
-    // ======================================
-    // FORM
-    // ======================================
+    // ── Generated / uploaded data ─────────────────────────────
+    nodes: Node[];
+    setNodes: (nodes: Node[]) => void;
 
-    updateGenerateForm: (
-        field: keyof GenerateFormData,
-        value: string | number
-    ) => void;
+    instance: CVRPInstance | null;
+    setInstance: (instance: CVRPInstance | null) => void;
 
-    resetGenerateForm: () => void;
+    // ── Solve results ─────────────────────────────────────────
+    /**
+     * True once BOTH baseline and EulerQ routes have been set.
+     * Controls solver dot active state, metrics banner visibility,
+     * and assignments panel content.
+     */
+    hasResults: boolean;
 
-    // ======================================
-    // DATA
-    // ======================================
+    /** Ordered node-ID arrays per vehicle, e.g. [[0,2,4,0],[0,1,3,0]] */
+    baselineRoutes: number[][] | null;
+    setBaselineRoutes: (routes: number[][] | null) => void;
 
-    setNodes: (nodes: CVRPNode[]) => void;
+    eulerqRoutes: number[][] | null;
+    setEulerqRoutes: (routes: number[][] | null) => void;
 
-    setDistanceMatrix: (matrix: number[][]) => void;
+    /** Derived per-vehicle details — populated alongside *Routes setters */
+    baselineAssignments: RouteAssignment[] | null;
+    setBaselineAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    // ======================================
-    // VALIDATION
-    // ======================================
+    eulerqAssignments: RouteAssignment[] | null;
+    setEulerqAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    setValidationErrors: (errors: ValidationError[]) => void;
+    metrics: SolveMetrics | null;
+    setMetrics: (metrics: SolveMetrics | null) => void;
 
-    addValidationError: (error: ValidationError) => void;
-
-    clearValidationErrors: () => void;
-
-    // ======================================
-    // RESULTS
-    // ======================================
-
-    setNaiveResult: (result: SolverResult | null) => void;
-
-    setGreedyResult: (result: SolverResult | null) => void;
-
-    setEulerQResult: (result: SolverResult | null) => void;
-
-    setMetrics: (metrics: ComparisonMetrics | null) => void;
-
-    clearResults: () => void;
-
-    // ======================================
-    // LOADING
-    // ======================================
-
+    // ── Loading ───────────────────────────────────────────────
+    isLoading: boolean;
     setLoading: (loading: boolean) => void;
 
-    // ======================================
-    // MAP
-    // ======================================
-
-    mapViewport: MapViewport;
-
-    setMapViewport: (viewport: MapViewport) => void;
-
-    // ======================================
-    // FULL RESET
-    // ======================================
-
+    // ── Full reset ────────────────────────────────────────────
     resetAll: () => void;
 }
 
-// ======================================
-// DEFAULTS
-// ======================================
-
-const defaultGenerateForm: GenerateFormData = {
-    numVehicles: 3,
-
-    numPickups: 8,
-
-    vehicleCapacity: "10",
-
-    pickupLoad: "2,3,1,4,2,1,3,2",
-};
-
-const defaultMapViewport: MapViewport = {
-    center: [12.9716, 77.5946], // Bengaluru
-
-    zoom: 11,
-};
-
-// ======================================
-// STORE
-// ======================================
-
-export const useComparisonStore = create<ComparisonStore>((set) => ({
-    // ======================================
-    // INITIAL STATE
-    // ======================================
-
+// ─────────────────────────────────────────────────────────────
+// Store
+// ─────────────────────────────────────────────────────────────
+export const useComparisonStore = create<ComparisonStore>((set, get) => ({
+    // ── Initial state ─────────────────────────────────────────
     inputMode: "generate",
-
     baselineSolver: "naive",
 
     nodes: [],
+    instance: null,
 
-    distanceMatrix: [],
-
-    generateForm: defaultGenerateForm,
-
-    validationErrors: [],
+    hasResults: false,
+    baselineRoutes: null,
+    eulerqRoutes: null,
+    baselineAssignments: null,
+    eulerqAssignments: null,
+    metrics: null,
 
     isLoading: false,
 
-    hasResults: false,
+    // ── Actions ───────────────────────────────────────────────
+    setInputMode: (mode) => set({ inputMode: mode }),
 
-    naiveResult: null,
+    setBaselineSolver: (solver) => set({ baselineSolver: solver }),
 
-    greedyResult: null,
+    setNodes: (nodes) => set({ nodes }),
 
-    eulerQResult: null,
+    setInstance: (instance) => set({ instance }),
 
-    metrics: null,
-
-    mapViewport: defaultMapViewport,
-
-    // ======================================
-    // MODE ACTIONS
-    // ======================================
-
-    setInputMode: (mode) => {
-        set({
-            inputMode: mode,
-        });
-    },
-
-    setBaselineSolver: (solver) => {
-        set({
-            baselineSolver: solver,
-        });
-    },
-
-    // ======================================
-    // FORM ACTIONS
-    // ======================================
-
-    updateGenerateForm: (field, value) => {
+    /**
+     * Setting baseline routes also re-evaluates hasResults:
+     * results are considered available when BOTH baseline AND
+     * eulerq routes are non-empty.
+     */
+    setBaselineRoutes: (routes) =>
         set((state) => ({
-            generateForm: {
-                ...state.generateForm,
-                [field]: value,
-            },
-        }));
-    },
+            baselineRoutes: routes,
+            hasResults:
+                !!(routes && routes.length > 0) &&
+                !!(state.eulerqRoutes && state.eulerqRoutes.length > 0),
+        })),
 
-    resetGenerateForm: () => {
-        set({
-            generateForm: defaultGenerateForm,
-        });
-    },
-
-    // ======================================
-    // DATA ACTIONS
-    // ======================================
-
-    setNodes: (nodes) => {
-        set({
-            nodes,
-        });
-    },
-
-    setDistanceMatrix: (matrix) => {
-        set({
-            distanceMatrix: matrix,
-        });
-    },
-
-    // ======================================
-    // VALIDATION ACTIONS
-    // ======================================
-
-    setValidationErrors: (errors) => {
-        set({
-            validationErrors: errors,
-        });
-    },
-
-    addValidationError: (error) => {
+    /**
+     * Setting eulerq routes also re-evaluates hasResults.
+     */
+    setEulerqRoutes: (routes) =>
         set((state) => ({
-            validationErrors: [...state.validationErrors, error],
-        }));
-    },
+            eulerqRoutes: routes,
+            hasResults:
+                !!(routes && routes.length > 0) &&
+                !!(state.baselineRoutes && state.baselineRoutes.length > 0),
+        })),
 
-    clearValidationErrors: () => {
-        set({
-            validationErrors: [],
-        });
-    },
+    setBaselineAssignments: (assignments) =>
+        set({ baselineAssignments: assignments }),
 
-    // ======================================
-    // RESULT ACTIONS
-    // ======================================
+    setEulerqAssignments: (assignments) =>
+        set({ eulerqAssignments: assignments }),
 
-    setNaiveResult: (result) => {
-        set({
-            naiveResult: result,
+    setMetrics: (metrics) => set({ metrics }),
 
-            hasResults: !!result,
-        });
-    },
+    setLoading: (loading) => set({ isLoading: loading }),
 
-    setGreedyResult: (result) => {
-        set({
-            greedyResult: result,
-        });
-    },
-
-    setEulerQResult: (result) => {
-        set({
-            eulerQResult: result,
-        });
-    },
-
-    setMetrics: (metrics) => {
-        set({
-            metrics,
-        });
-    },
-
-    clearResults: () => {
-        set({
-            naiveResult: null,
-
-            greedyResult: null,
-
-            eulerQResult: null,
-
-            metrics: null,
-
-            hasResults: false,
-        });
-    },
-
-    // ======================================
-    // LOADING ACTIONS
-    // ======================================
-
-    setLoading: (loading) => {
-        set({
-            isLoading: loading,
-        });
-    },
-
-    // ======================================
-    // MAP ACTIONS
-    // ======================================
-
-    setMapViewport: (viewport) => {
-        set({
-            mapViewport: viewport,
-        });
-    },
-
-    // ======================================
-    // RESET EVERYTHING
-    // ======================================
-
-    resetAll: () => {
+    resetAll: () =>
         set({
             inputMode: "generate",
-
             baselineSolver: "naive",
-
             nodes: [],
-
-            distanceMatrix: [],
-
-            generateForm: defaultGenerateForm,
-
-            validationErrors: [],
-
-            isLoading: false,
-
+            instance: null,
             hasResults: false,
-
-            naiveResult: null,
-
-            greedyResult: null,
-
-            eulerQResult: null,
-
+            baselineRoutes: null,
+            eulerqRoutes: null,
+            baselineAssignments: null,
+            eulerqAssignments: null,
             metrics: null,
-
-            mapViewport: defaultMapViewport,
-        });
-    },
+            isLoading: false,
+        }),
 }));

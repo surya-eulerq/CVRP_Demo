@@ -1,206 +1,81 @@
 // src/types/cvrp.ts
+// Single source of truth for all CVRP types
+// Spec ref: §2 (Solver Input Contract), §3 (Solver Output Contract)
 
-// ================================
-// BASIC TYPES
-// ================================
-
-export type SolverType = "naive" | "greedy" | "eulerq";
-
-export type InputMode = "generate" | "upload";
-
-// ================================
-// LOCATION / NODE TYPES
-// ================================
-
-export interface Coordinate {
+// ─────────────────────────────────────────────────────────────
+// Node
+// ─────────────────────────────────────────────────────────────
+export interface Node {
+    id: number;   // 0 = depot, 1…N = pickup nodes
     lat: number;
     lng: number;
+    load: number; // 0 for depot, ≥0 for pickups
 }
 
-export interface CVRPNode extends Coordinate {
-    id: number;
-    label: string;
-    demand: number;
-    isDepot: boolean;
-}
-
-// ================================
-// VEHICLE TYPES
-// ================================
-
-export interface Vehicle {
-    id: number;
-    capacity: number;
-}
-
-// ================================
-// ROUTE TYPES
-// ================================
-
-export interface VehicleRoute {
-    vehicleId: number;
-
-    // Example:
-    // [0, 3, 5, 2, 0]
-    // starts and ends at depot
-    route: number[];
-
-    totalDistance: number;
-
-    totalLoad: number;
-}
-
-export interface AssignmentItem {
-    vehicleId: number;
-    stops: number[];
-    stopCount: number;
-}
-
-// ================================
-// SOLVER RESPONSE TYPES
-// ================================
-
-export interface SolverMetrics {
-    objectiveValue: number;
-    solveTimeMs: number;
-}
-
-export interface SolverResult {
-    solver: SolverType;
-
-    metrics: SolverMetrics;
-
-    routes: VehicleRoute[];
-
-    rawResult?: unknown;
-}
-
-// ================================
-// API CONTRACT TYPES
-// ================================
-
-export interface CVRPInstancePayload {
+// ─────────────────────────────────────────────────────────────
+// Solver Input  (spec §2)
+// ─────────────────────────────────────────────────────────────
+export interface CVRPInstance {
     num_vehicles: number;
-
     num_pickups: number;
-
-    vehicle_capacity: number | number[];
-
-    distances: number[][];
-
-    pickup_load: number[];
-
+    vehicle_capacity: number | number[];   // int OR int[] of length num_vehicles
+    distances: number[][];                 // shape (N, N), N = 1 + num_pickups
+    pickup_load: number[];                 // shape (N,), index 0 = depot = 0
     backend: "cim";
-
-    force_backend_use: boolean;
+    force_backend_use: true;
 }
 
-export interface EulerQApiResponse {
+// ─────────────────────────────────────────────────────────────
+// Solver Output  (spec §3)
+// ─────────────────────────────────────────────────────────────
+export interface SolverResult {
     solveTimeMs: number;
-
     objectiveValue: number;
-
-    result: Array<[number, [number, number]]>;
+    result: [number, [number, number]][]; // [vehicle_id, [from_node, to_node]]
 }
 
-// ================================
-// GENERATE MODE TYPES
-// ================================
-
-export interface GenerateFormData {
-    numVehicles: number;
-
-    numPickups: number;
-
-    vehicleCapacity: string;
-
-    pickupLoad: string;
+// ─────────────────────────────────────────────────────────────
+// Derived — per-vehicle route summary
+// ─────────────────────────────────────────────────────────────
+export interface RouteAssignment {
+    vehicleId: number;
+    route: number[];       // ordered node IDs including depot at start+end
+    totalDistance: number;
+    numStops: number;      // excludes depot
 }
 
-// ================================
-// UPLOAD MODE TYPES
-// ================================
+// ─────────────────────────────────────────────────────────────
+// UI state
+// ─────────────────────────────────────────────────────────────
+export type SolverName = "naive" | "greedy" | "eulerq";
+export type InputMode = "generate" | "upload";
+export type BaselineName = "naive" | "greedy";
 
-export interface UploadConfigData {
-    numVehicles: number;
-
-    numPickups: number;
-
-    vehicleCapacity: number | number[];
-
-    pickupLoad: number[];
-}
-
-export interface ParsedUploadData {
-    config: UploadConfigData;
-
-    distanceMatrix?: number[][];
-
-    coordinates?: CVRPNode[];
-}
-
-// ================================
-// VALIDATION TYPES
-// ================================
-
-export interface ValidationError {
-    field: string;
-
-    message: string;
-}
-
-// ================================
-// METRICS BAR TYPES
-// ================================
-
-export interface ComparisonMetrics {
+// ─────────────────────────────────────────────────────────────
+// Metrics bar  (computed after solve)
+// ─────────────────────────────────────────────────────────────
+export interface SolveMetrics {
     baselineObjective: number;
-
-    baselineTime: number;
-
+    baselineTime: number;     // ms
     eulerQObjective: number;
-
-    eulerQTime: number;
-
+    eulerQTime: number;       // ms
     improvementPercent: number;
 }
 
-// ================================
-// MAP TYPES
-// ================================
-
-export interface MapViewport {
-    center: [number, number];
-
-    zoom: number;
+// ─────────────────────────────────────────────────────────────
+// Validation
+// ─────────────────────────────────────────────────────────────
+export interface ValidationError {
+    field: string;
+    message: string;
 }
 
-// ================================
-// STORE TYPES
-// ================================
-
-export interface ComparisonState {
-    inputMode: InputMode;
-
-    baselineSolver: "naive" | "greedy";
-
-    nodes: CVRPNode[];
-
-    distanceMatrix: number[][];
-
-    generateForm: GenerateFormData;
-
-    validationErrors: ValidationError[];
-
-    isLoading: boolean;
-
-    hasResults: boolean;
-
-    naiveResult: SolverResult | null;
-
-    greedyResult: SolverResult | null;
-
-    eulerQResult: SolverResult | null;
-
-    metrics: ComparisonMetrics | null;
+// ─────────────────────────────────────────────────────────────
+// generateInstance() params  (used by generator.ts)
+// ─────────────────────────────────────────────────────────────
+export interface GenerateParams {
+    numVehicles: number;
+    numPickups: number;
+    rawCapacity: string;    // raw text field value e.g. "10" or "10,12,8"
+    rawPickupLoad: string;  // raw text field value e.g. "2,3,1,4,2,1,3,2"
 }
