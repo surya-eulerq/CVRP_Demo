@@ -123,11 +123,12 @@ function OrDivider() {
 function Sheet1Preview() {
   return (
     <>
-      <p className="info-description">
+      <p className="info-description sheet1-description">
         This sheet holds all key settings for your problem. Each row is one
         parameter — put the <strong>name</strong> in column A and its{" "}
         <strong>value</strong> in column B.
       </p>
+      <p></p>
 
       <Spreadsheet label="Sheet1 — Parameters">
         <table className="xl-table">
@@ -629,12 +630,12 @@ export default function Mode({
           font-family: inherit;
         }
         .btn-generate {
-          background: rgba(16,224,161,0.1);
-          color: var(--accent);
+          background: rgba(139, 150, 146, 0.1);
+          color: grey;
           border: 1px solid rgba(16,224,161,0.25);
         }
         .btn-generate:hover {
-          background: rgba(16,224,161,0.18);
+          background: rgba(162, 170, 168, 0.18);
           border-color: rgba(16,224,161,0.45);
           box-shadow: 0 0 16px rgba(16,224,161,0.15);
         }
@@ -773,7 +774,7 @@ export default function Mode({
           width: 660px;
           max-width: 92vw;
           /* Fixed height — modal never resizes when switching tabs */
-          height: 680px;
+          height: 550px;
           max-height: 90vh;
           background: #081225;
           border: 1px solid #1b2a47;
@@ -1036,6 +1037,11 @@ export default function Mode({
         /* ────────────────────────────────────────────── */
         /* ── Spreadsheet preview ─────────────────────── */
         /* ────────────────────────────────────────────── */
+        .sheet1-description {
+  margin-bottom: 18px;
+}
+
+
 
         .xl-wrap {
           border: 1px solid #1e293b;
@@ -1043,6 +1049,12 @@ export default function Mode({
           overflow: hidden;
           font-family: 'JetBrains Mono', monospace;
           font-size: 12px;
+          margin-top: 18px;
+
+          margin-bottom: 18px;
+
+          
+
         }
         .xl-topbar {
           display: flex;
@@ -1065,6 +1077,7 @@ export default function Mode({
           width: 100%;
           border-collapse: collapse;
           table-layout: auto;
+          padding: 10px 16px;
         }
         table.xl-table th {
           background: #0d1f35;
@@ -1136,22 +1149,7 @@ export default function Mode({
           background: #0d1f35;
         }
 
-        /* Depot badge inside cell */
-        .depot-badge {
-          display: inline-block;
-          margin-left: 7px;
-          font-size: 9px;
-          font-weight: 700;
-          letter-spacing: 0.06em;
-          text-transform: uppercase;
-          padding: 1px 5px;
-          border-radius: 4px;
-          background: rgba(161,120,0,0.2);
-          color: #c9a227;
-          border: 1px solid rgba(161,120,0,0.3);
-          vertical-align: middle;
-          font-family: inherit;
-        }
+      
       `}</style>
     </>
   );

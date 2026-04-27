@@ -9,6 +9,7 @@ import type {
     BaselineName,
     SolveMetrics,
     RouteAssignment,
+    VehicleRoute,
 } from "../types/cvrp";
 
 // ─────────────────────────────────────────────────────────────
@@ -39,11 +40,11 @@ interface ComparisonStore {
     hasResults: boolean;
 
     /** Ordered node-ID arrays per vehicle, e.g. [[0,2,4,0],[0,1,3,0]] */
-    baselineRoutes: number[][] | null;
-    setBaselineRoutes: (routes: number[][] | null) => void;
+    baselineRoutes: VehicleRoute[] | null;
+    setBaselineRoutes: (routes: VehicleRoute[] | null) => void;
 
-    eulerqRoutes: number[][] | null;
-    setEulerqRoutes: (routes: number[][] | null) => void;
+    eulerqRoutes: VehicleRoute[] | null;
+    setEulerqRoutes: (routes: VehicleRoute[] | null) => void;
 
     /** Derived per-vehicle details — populated alongside *Routes setters */
     baselineAssignments: RouteAssignment[] | null;
@@ -54,6 +55,17 @@ interface ComparisonStore {
 
     metrics: SolveMetrics | null;
     setMetrics: (metrics: SolveMetrics | null) => void;
+
+    /**
+     * Convenience action used by CompareDashboard to commit all three
+     * outputs in a single atomic update — avoids three separate setState
+     * calls and the intermediate renders they would cause.
+     */
+    setResults: (payload: {
+        baselineRoutes: VehicleRoute[];
+        eulerqRoutes: VehicleRoute[];
+        metrics: SolveMetrics;
+    }) => void;
 
     // ── Loading ───────────────────────────────────────────────
     isLoading: boolean;
@@ -66,7 +78,7 @@ interface ComparisonStore {
 // ─────────────────────────────────────────────────────────────
 // Store
 // ─────────────────────────────────────────────────────────────
-export const useComparisonStore = create<ComparisonStore>((set, get) => ({
+export const useComparisonStore = create<ComparisonStore>((set) => ({
     // ── Initial state ─────────────────────────────────────────
     inputMode: "generate",
     baselineSolver: "naive",
@@ -123,6 +135,20 @@ export const useComparisonStore = create<ComparisonStore>((set, get) => ({
         set({ eulerqAssignments: assignments }),
 
     setMetrics: (metrics) => set({ metrics }),
+
+    /**
+     * Atomic update — sets baselineRoutes, eulerqRoutes, and metrics
+     * in a single state transition so the UI re-renders exactly once.
+     * This is what CompareDashboard calls after all three solvers finish.
+     */
+    setResults: ({ baselineRoutes, eulerqRoutes, metrics }) =>
+        set({
+            baselineRoutes,
+            eulerqRoutes,
+            metrics,
+            hasResults:
+                baselineRoutes.length > 0 && eulerqRoutes.length > 0,
+        }),
 
     setLoading: (loading) => set({ isLoading: loading }),
 

@@ -12,6 +12,9 @@ export interface Node {
     load: number; // 0 for depot, ≥0 for pickups
 }
 
+/** Alias kept for haversine.ts compatibility */
+export type CVRPNode = Node;
+
 // ─────────────────────────────────────────────────────────────
 // Solver Input  (spec §2)
 // ─────────────────────────────────────────────────────────────
@@ -25,23 +28,39 @@ export interface CVRPInstance {
     force_backend_use: true;
 }
 
+/** Shape sent to the EulerQ API */
+export type CVRPInstancePayload = CVRPInstance;
+
 // ─────────────────────────────────────────────────────────────
-// Solver Output  (spec §3)
+// Solver Output — raw API response  (spec §3)
 // ─────────────────────────────────────────────────────────────
-export interface SolverResult {
+export interface EulerQApiResponse {
     solveTimeMs: number;
     objectiveValue: number;
     result: [number, [number, number]][]; // [vehicle_id, [from_node, to_node]]
 }
 
+/** Alias kept for backward compat */
+export type SolverResult = EulerQApiResponse;
+
 // ─────────────────────────────────────────────────────────────
 // Derived — per-vehicle route summary
+// Shared output contract for ALL three solvers (naive, greedy, eulerq)
 // ─────────────────────────────────────────────────────────────
+export interface VehicleRoute {
+    vehicleId: number;
+    route: number[];          // ordered node IDs including depot at start AND end
+    totalDistance: number;    // sum of all leg distances
+    totalLoad: number;        // sum of pickup_load for all stops (excl. depot)
+    legDistances: number[];   // distance for each leg: legDistances[k] = dist(route[k], route[k+1])
+}
+
+/** Alias kept for RouteAssignment references in older code */
 export interface RouteAssignment {
     vehicleId: number;
-    route: number[];       // ordered node IDs including depot at start+end
+    route: number[];
     totalDistance: number;
-    numStops: number;      // excludes depot
+    numStops: number;
 }
 
 // ─────────────────────────────────────────────────────────────
