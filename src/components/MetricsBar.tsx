@@ -92,9 +92,9 @@ export default function MetricsBar({
         <section className="h-20 px-6 py-2">
             <div className="w-full h-full flex gap-4">
                 <MetricCard
-                    title="Baseline Objective"
-                    value={baselineObjective.toFixed(2)}
-                    accent="bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                    title="Baseline Distance"
+                    value={`${baselineObjective.toFixed(1)} m`}
+                    accent="bg-orange-500/10 text-white border border-orange-500/20"
                     icon={<Route className="w-5 h-5" />}
                 />
 
@@ -106,8 +106,8 @@ export default function MetricsBar({
                 />
 
                 <MetricCard
-                    title="EulerQ Objective"
-                    value={eulerQObjective.toFixed(2)}
+                    title="EulerQ Distance"
+                    value={`${eulerQObjective.toFixed(1)} m`}
                     accent="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
                     icon={<Zap className="w-5 h-5" />}
                 />

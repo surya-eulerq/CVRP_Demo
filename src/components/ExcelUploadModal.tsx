@@ -9,9 +9,9 @@ import { createPortal } from "react-dom";
 // ─────────────────────────────────────────────────────────────
 
 interface ExcelUploadModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onUpload: (files: File[]) => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onUpload: (files: File[]) => void;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -19,10 +19,10 @@ interface ExcelUploadModalProps {
 // ─────────────────────────────────────────────────────────────
 
 function validateFile(file: File): string | null {
-    if (!file.name.endsWith(".xlsx")) {
-        return "Only .xlsx files are accepted.";
-    }
-    return null;
+  if (!file.name.endsWith(".xlsx")) {
+    return "Only .xlsx files are accepted.";
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -30,196 +30,196 @@ function validateFile(file: File): string | null {
 // ─────────────────────────────────────────────────────────────
 
 const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
-    isOpen,
-    onClose,
-    onUpload,
+  isOpen,
+  onClose,
+  onUpload,
 }) => {
-    const [file, setFile] = useState<File | null>(null);
-    const [validationError, setValidationError] = useState<string | null>(null);
-    const [isDragging, setIsDragging] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-    if (!isOpen) return null;
+  if (!isOpen) return null;
 
-    // ── File selection ───────────────────────────────────────────
+  // ── File selection ───────────────────────────────────────────
 
-    function applyFile(selected: File) {
-        const err = validateFile(selected);
-        setValidationError(err);
-        setFile(err ? null : selected);
+  function applyFile(selected: File) {
+    const err = validateFile(selected);
+    setValidationError(err);
+    setFile(err ? null : selected);
+  }
+
+  function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
+    const selected = e.target.files?.[0];
+    if (selected) applyFile(selected);
+  }
+
+  function handleDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = e.dataTransfer.files?.[0];
+    if (dropped) applyFile(dropped);
+  }
+
+  function handleDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave() {
+    setIsDragging(false);
+  }
+
+  function clearFile() {
+    setFile(null);
+    setValidationError(null);
+    if (inputRef.current) inputRef.current.value = "";
+  }
+
+  // ── Submit ───────────────────────────────────────────────────
+
+  function handleUpload() {
+    if (!file) {
+      setValidationError("Please select an .xlsx file before uploading.");
+      return;
     }
+    onUpload([file]);
+    onClose();
+  }
 
-    function handleFileChange(e: ChangeEvent<HTMLInputElement>) {
-        const selected = e.target.files?.[0];
-        if (selected) applyFile(selected);
-    }
+  // ── Render ───────────────────────────────────────────────────
 
-    function handleDrop(e: DragEvent<HTMLDivElement>) {
-        e.preventDefault();
-        setIsDragging(false);
-        const dropped = e.dataTransfer.files?.[0];
-        if (dropped) applyFile(dropped);
-    }
+  return createPortal(
+    <div
+      className="eum-overlay"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Upload Excel file"
+    >
+      <div className="eum-modal" onClick={(e) => e.stopPropagation()}>
 
-    function handleDragOver(e: DragEvent<HTMLDivElement>) {
-        e.preventDefault();
-        setIsDragging(true);
-    }
-
-    function handleDragLeave() {
-        setIsDragging(false);
-    }
-
-    function clearFile() {
-        setFile(null);
-        setValidationError(null);
-        if (inputRef.current) inputRef.current.value = "";
-    }
-
-    // ── Submit ───────────────────────────────────────────────────
-
-    function handleUpload() {
-        if (!file) {
-            setValidationError("Please select an .xlsx file before uploading.");
-            return;
-        }
-        onUpload([file]);
-        onClose();
-    }
-
-    // ── Render ───────────────────────────────────────────────────
-
-    return createPortal(
-        <div
-            className="eum-overlay"
+        {/* Header */}
+        <div className="eum-header">
+          <div className="eum-header-icon" aria-hidden>
+            <IoCloudUploadOutline />
+          </div>
+          <div className="eum-header-text">
+            <h3>Upload Excel File</h3>
+            <p>One .xlsx file · 2 sheets required</p>
+          </div>
+          <button
+            className="eum-close-btn"
             onClick={onClose}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Upload Excel file"
-        >
-            <div className="eum-modal" onClick={(e) => e.stopPropagation()}>
+            aria-label="Close upload modal"
+          >
+            <IoCloseOutline size={16} />
+          </button>
+        </div>
 
-                {/* Header */}
-                <div className="eum-header">
-                    <div className="eum-header-icon" aria-hidden>
-                        <IoCloudUploadOutline />
-                    </div>
-                    <div className="eum-header-text">
-                        <h3>Upload Excel File</h3>
-                        <p>One .xlsx file · 2 sheets required</p>
-                    </div>
-                    <button
-                        className="eum-close-btn"
-                        onClick={onClose}
-                        aria-label="Close upload modal"
-                    >
-                        <IoCloseOutline size={16} />
-                    </button>
+        {/* Body */}
+        <div className="eum-body">
+
+          {/* Drop zone */}
+          <div
+            className={`eum-dropzone ${isDragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onClick={() => !file && inputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            aria-label="Drop zone for Excel file"
+            onKeyDown={(e) => e.key === "Enter" && !file && inputRef.current?.click()}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".xlsx"
+              onChange={handleFileChange}
+              style={{ display: "none" }}
+              aria-label="Excel file input"
+            />
+
+            {file ? (
+              /* ── File selected state ── */
+              <div className="eum-file-info">
+                <div className="eum-file-icon">
+                  <IoDocumentOutline size={22} />
                 </div>
-
-                {/* Body */}
-                <div className="eum-body">
-
-                    {/* Drop zone */}
-                    <div
-                        className={`eum-dropzone ${isDragging ? "dragging" : ""} ${file ? "has-file" : ""}`}
-                        onDrop={handleDrop}
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onClick={() => !file && inputRef.current?.click()}
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Drop zone for Excel file"
-                        onKeyDown={(e) => e.key === "Enter" && !file && inputRef.current?.click()}
-                    >
-                        <input
-                            ref={inputRef}
-                            type="file"
-                            accept=".xlsx"
-                            onChange={handleFileChange}
-                            style={{ display: "none" }}
-                            aria-label="Excel file input"
-                        />
-
-                        {file ? (
-                            /* ── File selected state ── */
-                            <div className="eum-file-info">
-                                <div className="eum-file-icon">
-                                    <IoDocumentOutline size={22} />
-                                </div>
-                                <div className="eum-file-meta">
-                                    <span className="eum-file-name">{file.name}</span>
-                                    <span className="eum-file-size">
-                                        {(file.size / 1024).toFixed(1)} KB
-                                    </span>
-                                </div>
-                                <div className="eum-file-status">
-                                    <IoCheckmarkCircle size={18} className="eum-check-icon" />
-                                </div>
-                                <button
-                                    className="eum-remove-btn"
-                                    onClick={(e) => { e.stopPropagation(); clearFile(); }}
-                                    aria-label="Remove file"
-                                >
-                                    <IoCloseOutline size={14} />
-                                </button>
-                            </div>
-                        ) : (
-                            /* ── Empty state ── */
-                            <div className="eum-empty">
-                                <div className="eum-drop-icon" aria-hidden>
-                                    <IoCloudUploadOutline size={28} />
-                                </div>
-                                <p className="eum-drop-title">
-                                    Drop your file here
-                                    <span className="eum-drop-or"> or </span>
-                                    <span className="eum-drop-browse">browse</span>
-                                </p>
-                                <p className="eum-drop-hint">Accepts .xlsx · Must contain exactly 2 sheets</p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Validation error */}
-                    {validationError && (
-                        <div className="eum-error" role="alert">
-                            <IoAlertCircleOutline size={14} className="eum-error-icon" />
-                            <span>{validationError}</span>
-                        </div>
-                    )}
-
-                    {/* Sheet requirements callout */}
-                    <div className="eum-callout">
-                        <div className="eum-callout-row">
-                            <span className="eum-callout-dot" />
-                            <span><strong>Sheet 1</strong> — Parameters (num_vehicles, num_pickups, …)</span>
-                        </div>
-                        <div className="eum-callout-row">
-                            <span className="eum-callout-dot" />
-                            <span><strong>Sheet 2</strong> — Distance matrix <em>or</em> GPS coordinates</span>
-                        </div>
-                    </div>
+                <div className="eum-file-meta">
+                  <span className="eum-file-name">{file.name}</span>
+                  <span className="eum-file-size">
+                    {(file.size / 1024).toFixed(1)} KB
+                  </span>
                 </div>
-
-                {/* Footer */}
-                <div className="eum-footer">
-                    <button className="eum-btn eum-btn-cancel" onClick={onClose}>
-                        Cancel
-                    </button>
-                    <button
-                        className={`eum-btn eum-btn-upload ${!file ? "disabled" : ""}`}
-                        onClick={handleUpload}
-                        disabled={!file}
-                        aria-disabled={!file}
-                    >
-                        <IoCloudUploadOutline size={14} aria-hidden />
-                        Upload File
-                    </button>
+                <div className="eum-file-status">
+                  <IoCheckmarkCircle size={18} className="eum-check-icon" />
                 </div>
+                <button
+                  className="eum-remove-btn"
+                  onClick={(e) => { e.stopPropagation(); clearFile(); }}
+                  aria-label="Remove file"
+                >
+                  <IoCloseOutline size={14} />
+                </button>
+              </div>
+            ) : (
+              /* ── Empty state ── */
+              <div className="eum-empty">
+                <div className="eum-drop-icon" aria-hidden>
+                  <IoCloudUploadOutline size={28} />
+                </div>
+                <p className="eum-drop-title">
+                  Drop your file here
+                  <span className="eum-drop-or"> or </span>
+                  <span className="eum-drop-browse">browse</span>
+                </p>
+                <p className="eum-drop-hint">Accepts .xlsx · Must contain exactly 2 sheets</p>
+              </div>
+            )}
+          </div>
+
+          {/* Validation error */}
+          {validationError && (
+            <div className="eum-error" role="alert">
+              <IoAlertCircleOutline size={14} className="eum-error-icon" />
+              <span>{validationError}</span>
             </div>
+          )}
 
-            {/* ── Styles ── */}
-            <style>{`
+          {/* Sheet requirements callout */}
+          <div className="eum-callout">
+            <div className="eum-callout-row">
+              <span className="eum-callout-dot" />
+              <span><strong>Sheet 1</strong> — Parameters (num_vehicles, num_pickups, …)</span>
+            </div>
+            <div className="eum-callout-row">
+              <span className="eum-callout-dot" />
+              <span><strong>Sheet 2</strong> — Distance matrix <em>or</em> GPS coordinates</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="eum-footer">
+          <button className="eum-btn eum-btn-cancel" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            className={`eum-btn eum-btn-upload ${!file ? "disabled" : ""}`}
+            onClick={handleUpload}
+            disabled={!file}
+            aria-disabled={!file}
+          >
+            <IoCloudUploadOutline size={14} aria-hidden />
+            Upload File
+          </button>
+        </div>
+      </div>
+
+      {/* ── Styles ── */}
+      <style>{`
         @keyframes eumFadeIn {
           from { opacity: 0; }
           to   { opacity: 1; }
@@ -556,9 +556,9 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
           box-shadow: none;
         }
       `}</style>
-        </div>,
-        document.body
-    );
+    </div>,
+    document.body
+  );
 };
 
 export default ExcelUploadModal;

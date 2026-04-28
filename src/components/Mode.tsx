@@ -8,6 +8,7 @@ import {
   IoWarningOutline,
 } from "react-icons/io5";
 import ExcelUploadModal from "./ExcelUploadModal";
+import "../Styling/Mode.css";
 
 // ─────────────────────────────────────────────────────────────
 // Types
@@ -31,6 +32,7 @@ type Props = {
   onGenerate: () => void;
   onRunComparison: () => void;
   onUpload: (files: File[]) => void;
+  hasGenerated: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -338,6 +340,7 @@ interface GenerateModeProps {
   onPickupLoadChange: (v: string) => void;
   onGenerate: () => void;
   onRunComparison: () => void;
+  hasGenerated: boolean;
 }
 
 function GenerateMode({
@@ -352,6 +355,7 @@ function GenerateMode({
   onPickupLoadChange,
   onGenerate,
   onRunComparison,
+  hasGenerated,
 }: GenerateModeProps) {
   return (
     <>
@@ -425,7 +429,11 @@ function GenerateMode({
         <button className="btn-demo btn-generate" onClick={onGenerate}>
           ⚡ Generate
         </button>
-        <button className="btn-demo btn-solve" onClick={onRunComparison}>
+        <button
+          className={`btn-demo btn-solve ${!hasGenerated ? "btn-solve-disabled" : ""}`}
+          onClick={onRunComparison}
+          disabled={!hasGenerated}
+        >
           ▶ Run Comparison
         </button>
       </div>
@@ -486,6 +494,7 @@ export default function Mode({
   onGenerate,
   onRunComparison,
   onUpload,
+  hasGenerated,
 }: Props) {
   const [showUploadInfo, setShowUploadInfo] = useState(false);
   const [showExcelModal, setShowExcelModal] = useState(false);
@@ -529,6 +538,7 @@ export default function Mode({
             onPickupLoadChange={onPickupLoadChange}
             onGenerate={onGenerate}
             onRunComparison={onRunComparison}
+            hasGenerated={hasGenerated}
           />
         )}
 
@@ -554,603 +564,6 @@ export default function Mode({
       {showUploadInfo && (
         <InfoModal onClose={() => setShowUploadInfo(false)} />
       )}
-
-      {/* ─── Styles ───────────────────── */}
-      <style>{`
-
-        /* ── Mode switch ──────────────────────────────── */
-        .mode-switch-wrapper {
-          width: 100%;
-          display: flex;
-          justify-content: center;
-          margin-top: 32px;
-          margin-bottom: 18px;
-        }
-        .mode-tabs {
-          display: flex;
-          gap: 8px;
-          padding: 8px;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-        }
-        .mode-tab {
-          min-width: 160px;
-          height: 48px;
-          border-radius: 12px;
-          border: 1px solid var(--border2);
-          background: transparent;
-          color: var(--text3);
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          font-family: inherit;
-          font-size: 13px;
-        }
-        .mode-tab:hover:not(.active) {
-          color: var(--text2);
-          border-color: var(--border);
-          background: rgba(255,255,255,0.03);
-        }
-        .mode-tab.active {
-          background: linear-gradient(135deg, #10e0a1, #06c167);
-          color: #04130d;
-          border-color: transparent;
-          box-shadow: 0 2px 12px rgba(16,224,161,0.25);
-        }
-
-        /* ── Controls bar ─────────────────────────────── */
-        .controls {
-          display: flex;
-          align-items: flex-start;
-          gap: 12px;
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 14px;
-          padding: 10px 16px;
-          width: fit-content;
-          margin: 0 auto 20px;
-        }
-
-        /* ── Shared button base ───────────────────────── */
-        .btn-demo {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-          min-height: 42px;
-          padding: 0 20px;
-          border-radius: 10px;
-          border: none;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          white-space: nowrap;
-          font-family: inherit;
-        }
-        .btn-generate {
-          background: rgba(139, 150, 146, 0.1);
-          color: grey;
-          border: 1px solid rgba(16,224,161,0.25);
-        }
-        .btn-generate:hover {
-          background: rgba(162, 170, 168, 0.18);
-          border-color: rgba(16,224,161,0.45);
-          box-shadow: 0 0 16px rgba(16,224,161,0.15);
-        }
-        .btn-solve {
-          background: linear-gradient(135deg, #10e0a1, #06c167);
-          color: #04130d;
-          border: none;
-        }
-        .btn-solve:hover {
-          filter: brightness(1.1);
-          box-shadow: 0 4px 18px rgba(16,224,161,0.3);
-          transform: translateY(-1px);
-        }
-        .btn-upload {
-          background: rgba(255,255,255,0.05);
-          color: var(--text2);
-          border: 1px solid var(--border2);
-        }
-        .btn-upload:hover {
-          background: rgba(255,255,255,0.09);
-          color: var(--text);
-          border-color: var(--border);
-        }
-
-        /* ── Upload mode layout ───────────────────────── */
-        .upload-mode-container {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          width: 100%;
-        }
-        .upload-actions {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-        .info-btn {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          border: 1px solid var(--border2);
-          background: rgba(16,224,161,0.05);
-          color: var(--text2);
-          cursor: pointer;
-          transition: all 0.2s ease;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-        }
-        .info-btn:hover {
-          background: rgba(16,224,161,0.15);
-          border-color: var(--accent);
-          color: var(--accent);
-          box-shadow: 0 0 8px rgba(16,224,161,0.2);
-          transform: scale(1.08);
-        }
-
-        /* ── Field group (generate mode) ──────────────── */
-        .field-group {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-        }
-        .field-label {
-          font-size: 11px;
-          font-weight: 600;
-          color: var(--text3);
-          letter-spacing: 0.04em;
-          text-transform: uppercase;
-          user-select: none;
-        }
-        .field-input {
-          height: 36px;
-          padding: 0 10px;
-          border-radius: 8px;
-          border: 1px solid var(--border2);
-          background: rgba(255,255,255,0.03);
-          color: var(--text);
-          font-size: 13px;
-          font-family: inherit;
-          outline: none;
-          transition: border-color 0.15s ease, box-shadow 0.15s ease;
-        }
-        .field-input:focus {
-          border-color: rgba(16,224,161,0.4);
-          box-shadow: 0 0 0 3px rgba(16,224,161,0.08);
-        }
-        .field-input.has-error {
-          border-color: rgba(239,68,68,0.5);
-        }
-        .field-error {
-          font-size: 10.5px;
-          color: #f87171;
-          margin-top: 2px;
-        }
-        .ctrl-sep {
-          width: 1px;
-          height: 42px;
-          background: var(--border);
-          align-self: center;
-          flex-shrink: 0;
-          margin: 0 4px;
-        }
-        .action-buttons {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          align-self: flex-end;
-          padding-bottom: 2px;
-        }
-
-        /* ────────────────────────────────────────────── */
-        /* ── Info Modal ──────────────────────────────── */
-        /* ────────────────────────────────────────────── */
-
-        .info-overlay {
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.75);
-          backdrop-filter: blur(8px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 9999;
-          padding: 24px;
-          animation: fadeIn 0.2s ease both;
-        }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes modalPop {
-          from { opacity: 0; transform: scale(0.96) translateY(8px); }
-          to   { opacity: 1; transform: scale(1)    translateY(0);   }
-        }
-
-        .info-modal {
-          width: 660px;
-          max-width: 92vw;
-          /* Fixed height — modal never resizes when switching tabs */
-          height: 550px;
-          max-height: 90vh;
-          background: #081225;
-          border: 1px solid #1b2a47;
-          border-radius: 20px;
-          overflow: hidden;
-          display: flex;
-          flex-direction: column;
-          box-shadow:
-            0 0 0 1px rgba(16,224,161,0.06),
-            0 24px 64px rgba(0,0,0,0.55),
-            0 0 40px rgba(16,224,161,0.05);
-          animation: modalPop 0.3s cubic-bezier(0.34,1.56,0.64,1) both;
-        }
-
-        /* Header */
-        .info-header {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 20px 22px 18px;
-          border-bottom: 1px solid #13213a;
-          background: rgba(16,224,161,0.03);
-          flex-shrink: 0;
-        }
-        .info-header-icon {
-          width: 36px;
-          height: 36px;
-          border-radius: 10px;
-          background: rgba(16,224,161,0.12);
-          border: 1px solid rgba(16,224,161,0.22);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          color: var(--accent);
-        }
-        .info-header-icon svg { width: 18px; height: 18px; }
-        .info-header-text { flex: 1; }
-        .info-header-text h3 {
-          font-size: 16px;
-          font-weight: 800;
-          color: var(--text);
-          margin: 0 0 3px;
-          letter-spacing: -0.01em;
-        }
-        .info-header-text p {
-          font-size: 11px;
-          color: var(--text3);
-          font-family: 'JetBrains Mono', monospace;
-          letter-spacing: 0.02em;
-          margin: 0;
-        }
-        .info-close-btn {
-          width: 30px;
-          height: 30px;
-          border-radius: 8px;
-          border: 1px solid var(--border2);
-          background: rgba(255,255,255,0.03);
-          color: var(--text2);
-          font-size: 14px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.15s ease;
-          flex-shrink: 0;
-          font-family: inherit;
-        }
-        .info-close-btn:hover {
-          background: rgba(255,255,255,0.08);
-          color: var(--text);
-        }
-
-        /* Sheet tabs */
-        .info-sheet-tabs {
-          display: flex;
-          gap: 0;
-          background: rgba(16,224,161,0.02);
-          border-bottom: 1px solid #13213a;
-          padding: 0 22px;
-          flex-shrink: 0;
-          overflow-x: auto;
-        }
-        .info-sheet-tabs::-webkit-scrollbar { display: none; }
-        .info-sheet-tab {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          padding: 10px 14px;
-          font-size: 11.5px;
-          color: var(--text3);
-          background: transparent;
-          border: none;
-          border-bottom: 2px solid transparent;
-          margin-bottom: -1px;
-          cursor: pointer;
-          white-space: nowrap;
-          transition: color 0.15s ease;
-          font-family: inherit;
-        }
-        .info-sheet-tab:hover { color: var(--text2); }
-        .info-sheet-tab.active {
-          color: var(--accent);
-          border-bottom-color: var(--accent);
-          font-weight: 700;
-        }
-        .sheet-tab-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: #1e3a2e;
-          flex-shrink: 0;
-          transition: background 0.15s ease;
-        }
-        .info-sheet-tab.active .sheet-tab-dot { background: var(--accent); }
-
-        /* Modal body — fills remaining height, scrolls internally */
-        .info-content {
-          padding: 24px 24px 28px;
-          overflow-y: auto;
-          overflow-x: hidden;
-          flex: 1;
-          min-height: 0;        /* critical: lets flexbox child shrink below content size */
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-          scroll-behavior: smooth;
-        }
-        .info-content::-webkit-scrollbar { width: 4px; }
-        .info-content::-webkit-scrollbar-track { background: transparent; }
-        .info-content::-webkit-scrollbar-thumb {
-          background: var(--border2);
-          border-radius: 2px;
-        }
-        .info-content::-webkit-scrollbar-thumb:hover {
-          background: #2a4060;
-        }
-
-        /* Description */
-        .info-description {
-          font-size: 12.5px;
-          color: var(--text2);
-          line-height: 1.7;
-          margin: 0;           /* spacing handled by parent gap */
-        }
-        .info-description strong { color: var(--text); font-weight: 600; }
-
-        /* Note row */
-        .info-note {
-          display: flex;
-          gap: 7px;
-          align-items: flex-start;
-          margin-top: 16px;
-          font-size: 11.5px;
-          color: var(--text3);
-          line-height: 1.6;
-          padding: 10px 12px;
-          background: rgba(250,204,21,0.05);
-          border: 1px solid rgba(250,204,21,0.12);
-          border-radius: 8px;
-        }
-        .info-note strong { color: var(--text2); font-weight: 600; }
-        .info-note-icon {
-          color: #facc15;
-          flex-shrink: 0;
-          font-size: 14px;
-          margin-top: 1px;
-        }
-
-        /* ── Preview section container ────────────────── */
-        .preview-section {
-          display: flex;
-          flex-direction: column;
-          gap: 12px;           /* breathing room between description → rules → table */
-          padding: 4px 0;      /* top/bottom micro-padding so first section isn't flush */
-        }
-        .section-label {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 10px;
-        }
-        .section-badge {
-          display: inline-flex;
-          align-items: center;
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.07em;
-          text-transform: uppercase;
-          padding: 2px 8px;
-          border-radius: 20px;
-          background: rgba(16,224,161,0.1);
-          color: var(--accent);
-          border: 1px solid rgba(16,224,161,0.22);
-        }
-        .section-badge-alt {
-          background: rgba(99,179,237,0.1);
-          color: #63b3ed;
-          border-color: rgba(99,179,237,0.22);
-        }
-        .section-title {
-          font-size: 13px;
-          font-weight: 700;
-          color: var(--text);
-          letter-spacing: -0.01em;
-        }
-
-        /* ── Rule group ───────────────────────────────── */
-        .rule-group {
-          display: flex;
-          flex-direction: column;
-          gap: 5px;
-          margin-bottom: 0;    /* parent gap handles spacing */
-          padding: 10px 12px;
-          background: rgba(255,255,255,0.02);
-          border: 1px solid #1e293b;
-          border-radius: 8px;
-        }
-        .rule-row {
-          display: flex;
-          align-items: baseline;
-          gap: 7px;
-          font-size: 11.5px;
-          color: var(--text3);
-          line-height: 1.5;
-        }
-        .rule-row strong { color: var(--text2); font-weight: 600; }
-        .rule-icon {
-          color: var(--accent);
-          font-size: 11px;
-          flex-shrink: 0;
-          opacity: 0.7;
-        }
-
-        /* ── OR divider ───────────────────────────────── */
-        .or-divider {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin: 28px 0;      /* generous vertical separation between Option A and B */
-        }
-        .or-line {
-          flex: 1;
-          height: 1px;
-          background: #1e293b;
-        }
-        .or-label {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-          color: var(--text3);
-          padding: 3px 10px;
-          border: 1px solid #1e293b;
-          border-radius: 20px;
-          background: rgba(255,255,255,0.02);
-        }
-
-        /* ────────────────────────────────────────────── */
-        /* ── Spreadsheet preview ─────────────────────── */
-        /* ────────────────────────────────────────────── */
-        .sheet1-description {
-  margin-bottom: 18px;
-}
-
-
-
-        .xl-wrap {
-          border: 1px solid #1e293b;
-          border-radius: 10px;
-          overflow: hidden;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 12px;
-          margin-top: 18px;
-
-          margin-bottom: 18px;
-
-          
-
-        }
-        .xl-topbar {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-          background: #1a4a2e;
-          color: rgba(255,255,255,0.85);
-          font-size: 11px;
-          font-family: inherit;
-          padding: 6px 11px;
-          letter-spacing: 0.01em;
-          border-bottom: 1px solid rgba(255,255,255,0.08);
-        }
-        .xl-topbar svg { flex-shrink: 0; }
-        .xl-scroll { overflow-x: auto; }
-        .xl-scroll::-webkit-scrollbar { height: 4px; }
-        .xl-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 2px; }
-
-        table.xl-table {
-          width: 100%;
-          border-collapse: collapse;
-          table-layout: auto;
-          padding: 10px 16px;
-        }
-        table.xl-table th {
-          background: #0d1f35;
-          border: 1px solid #1e293b;
-          padding: 6px 10px;
-          font-size: 10.5px;
-          font-weight: 600;
-          color: #4a6a8a;
-          text-align: center;
-          white-space: nowrap;
-        }
-        th.xl-row-num-head,
-        td.xl-row-num {
-          width: 32px;
-          min-width: 32px;
-          background: #0d1f35;
-          color: #4a6a8a;
-          font-size: 10.5px;
-          text-align: center;
-          border: 1px solid #1e293b;
-          padding: 5px 6px;
-          user-select: none;
-        }
-        th.xl-depot-head {
-          background: rgba(161,120,0,0.15) !important;
-          color: #c9a227 !important;
-        }
-        table.xl-table td {
-          border: 1px solid #1a2a3f;
-          padding: 6px 10px;
-          white-space: nowrap;
-        }
-
-        /* Cell types */
-        td.xl-key {
-          background: rgba(16,224,161,0.06);
-          color: #10e0a1;
-          font-weight: 600;
-          text-align: left;
-          min-width: 160px;
-        }
-        td.xl-val {
-          color: var(--text2);
-          text-align: left;
-          min-width: 140px;
-        }
-        td.xl-num {
-          color: var(--text2);
-          text-align: right;
-          min-width: 88px;
-          position: relative;
-        }
-        td.xl-depot {
-          background: rgba(161,120,0,0.12);
-          color: #c9a227;
-          font-weight: 600;
-          text-align: left;
-        }
-        td.xl-diag {
-          background: rgba(255,255,255,0.03);
-          color: #2a4060;
-          text-align: right;
-          font-weight: 600;
-        }
-        tr.xl-depot-row td {
-          background: rgba(161,120,0,0.07);
-        }
-        tr.xl-depot-row td.xl-row-num {
-          background: #0d1f35;
-        }
-
-      
-      `}</style>
     </>
   );
 }
