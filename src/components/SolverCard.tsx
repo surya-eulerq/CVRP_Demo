@@ -1,7 +1,7 @@
 // src/components/SolverCard.tsx
 import type { ReactNode } from "react";
 import "../Styling/SolverCard.css";
-import type { VehicleRoute } from "../types/cvrp";
+import type { Node, VehicleRoute } from "../types/cvrp";
 
 // ─────────────────────────────────────────────────────────────
 // Palette constants
@@ -43,7 +43,7 @@ function Spinner({ size = 48, color = "#10E0A1" }: { size?: number; color?: stri
 // Internal: Solver Running Overlay
 // ─────────────────────────────────────────────────────────────
 function SolverRunningOverlay({ accent }: { accent: "orange" | "teal" }) {
-    const color = accent === "orange" ? "#f97316" : "#10E0A1";
+    const color = accent === "orange" ? "#f97316" : "#f97316";
     return (
         <div className="sc-overlay">
             <Spinner size={48} color={color} />
@@ -54,10 +54,28 @@ function SolverRunningOverlay({ accent }: { accent: "orange" | "teal" }) {
 
 // ─────────────────────────────────────────────────────────────
 // Internal: Assignment Rows
+// V1.1: VehicleRoute.route is string[] (IDs like "DEPOT", "P001").
+// We build a string-ID → Node map for label/display lookups.
 // ─────────────────────────────────────────────────────────────
+
+/**
+ * Build a map from string stop ID → Node.
+ * Mirrors the ID scheme in generator.ts:
+ *   node at index 0 → "DEPOT"
+ *   node at index i → "P" + padStart(3, "0")
+ */
+function buildNodeMap(nodes: Node[]): Map<string, Node> {
+    const map = new Map<string, Node>();
+    nodes.forEach((node, i) => {
+        const key = i === 0 ? "DEPOT" : `P${String(i).padStart(3, "0")}`;
+        map.set(key, node);
+    });
+    return map;
+}
+
 interface AssignmentsRowsProps {
     routes: VehicleRoute[];
-    nodes: Array<{ id: string | number;[k: string]: unknown }>;
+    nodes: Node[];
     palette: "warm" | "cool";
     activeVehicleIdx: number | null;
     onVehicleClick: (idx: number | null) => void;
@@ -76,6 +94,9 @@ function AssignmentsRows({
         return <div className="sc-assignments-empty">No assignments yet.</div>;
     }
 
+    // V1.1: build once for the whole list
+    const nodeMap = buildNodeMap(nodes);
+
     return (
         <>
             {routes.map((vr, idx) => {
@@ -87,17 +108,24 @@ function AssignmentsRows({
                         : "sc-row-active-cool"
                     : "";
 
-                const stopLabels = (vr.route ?? [])
-                    .filter((nodeIdx: number) => nodes[nodeIdx] && nodeIdx !== 0)
-                    .map((nodeIdx: number) => {
-                        const node = nodes[nodeIdx];
-                        const rawId = node?.id ?? nodeIdx;
-                        return typeof rawId === "number"
-                            ? `O${String(rawId).padStart(3, "0")}`
-                            : String(rawId);
-                    });
+                // V1.1: route is string[]; exclude depot stops (first & last)
+                const stopIds = (vr.route ?? []).filter((id) => id !== "DEPOT");
 
-                const riderId = `R${String(idx + 1).padStart(3, "0")}`;
+                // Display label: use the pickup ID directly (e.g. "P001")
+                // or fall back gracefully for any custom IDs
+                const stopLabels = stopIds.map((id) => {
+                    const node = nodeMap.get(id);
+                    if (node) {
+                        // Re-derive a display label consistent with old "O001" style
+                        // using the node's numeric id (index in nodes array)
+                        return `O${String(node.id).padStart(3, "0")}`;
+                    }
+                    // Fallback: show the raw pickup ID
+                    return id;
+                });
+
+                // V1.1: vehicleId is carried directly on VehicleRoute
+                const riderId = vr.vehicleId ?? `R${String(idx + 1).padStart(3, "0")}`;
                 const count = stopLabels.length;
 
                 return (
@@ -106,7 +134,7 @@ function AssignmentsRows({
                         className={`sc-assignment-row ${activeClass}`}
                         onClick={() => onVehicleClick(isActive ? null : idx)}
                     >
-                        <div className="sc-assign-dot" style={{ background: color }} />
+
                         <span className={`sc-assign-rider-id sc-rider-${palette}`}>{riderId}</span>
                         <span className="sc-assign-orders">
                             {stopLabels.length > 0 ? stopLabels.join("   ") : "—"}
@@ -123,7 +151,6 @@ function AssignmentsRows({
 // SolverCard Props
 // ─────────────────────────────────────────────────────────────
 export interface SolverCardProps {
-
     title: string;
     accent: "orange" | "teal";
     rightAction?: ReactNode;
@@ -133,7 +160,7 @@ export interface SolverCardProps {
     solveTimeMs?: number;
     map: ReactNode;
     routes: VehicleRoute[];
-    nodes: Array<{ id: string | number;[k: string]: unknown }>;
+    nodes: Node[];
     activeVehicleIdx: number | null;
     onVehicleClick: (idx: number | null) => void;
     fleetDistance: number;
@@ -160,7 +187,6 @@ export default function SolverCard({
     const palette = accent === "orange" ? "warm" : "cool";
     const chipSpinnerColor = accent === "orange" ? "var(--text2)" : "var(--accent)";
 
-    // Dot state class
     const dotClass = showResults
         ? accent === "orange"
             ? "sc-dot-active-orange"
@@ -203,19 +229,14 @@ export default function SolverCard({
                 </div>
             </div>
 
-
-
             {/* ── Map (always visible; blurred while solving) ── */}
             <div className="sc-map-wrap">
-
                 <div className={isSolving ? "sc-map-blur-layer" : "sc-map-normal"}>
                     {map}
                 </div>
-
                 {isSolving && (
                     <SolverRunningOverlay accent={accent} />
                 )}
-
             </div>
 
             {/* ── Assignments + Fleet Distance (shown only after results) ── */}
@@ -235,18 +256,7 @@ export default function SolverCard({
                         />
                     </div>
 
-                    {/* <div className="sc-fleet-footer">
-                        <span className="sc-fleet-label">Total Fleet Distance</span>
-                        <span
-                            className="sc-fleet-val"
-                            style={{
-                                color:
-                                    accent === "orange"
-                                        ? "#ffffff"
-                                        : "var(--accent)"
-                            }}
-                        >{fleetDistance.toFixed(1)} m</span>
-                    </div> */}
+
                 </div>
             )}
         </div>

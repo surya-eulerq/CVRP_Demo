@@ -1,100 +1,110 @@
-// src/types/cvrp.ts
-// Single source of truth for all CVRP types
-// Spec ref: §2 (Solver Input Contract), §3 (Solver Output Contract)
-
-// ─────────────────────────────────────────────────────────────
-// Node
-// ─────────────────────────────────────────────────────────────
 export interface Node {
-    id: number;   // 0 = depot, 1…N = pickup nodes
+    id: number;
+    type: "depot" | "pickup";
     lat: number;
     lng: number;
-    load: number; // 0 for depot, ≥0 for pickups
+    demand: number;
 }
-
-/** Alias kept for haversine.ts compatibility */
 export type CVRPNode = Node;
 
-// ─────────────────────────────────────────────────────────────
-// Solver Input  (spec §2)
-// ─────────────────────────────────────────────────────────────
+export interface Rider {
+    id: string;
+    capacity: number;
+}
+
+
+export interface Pickup {
+    id: string;
+    lat: number;
+    lon: number;
+    load: number;
+    is_depot: boolean;
+}
+
+
 export interface CVRPInstance {
-    num_vehicles: number;
-    num_pickups: number;
-    vehicle_capacity: number | number[];   // int OR int[] of length num_vehicles
-    distances: number[][];                 // shape (N, N), N = 1 + num_pickups
-    pickup_load: number[];                 // shape (N,), index 0 = depot = 0
-    backend: "cim";
-    force_backend_use: true;
+    riders: Rider[];
+    pickups: Pickup[];
 }
 
-/** Shape sent to the EulerQ API */
-export type CVRPInstancePayload = CVRPInstance;
-
-// ─────────────────────────────────────────────────────────────
-// Solver Output — raw API response  (spec §3)
-// ─────────────────────────────────────────────────────────────
-export interface EulerQApiResponse {
-    solveTimeMs: number;
-    objectiveValue: number;
-    result: [number, [number, number]][]; // [vehicle_id, [from_node, to_node]]
+export interface CVRPPayloadV1 {
+    riders: Rider[];
+    pickups: Pickup[];
 }
 
-/** Alias kept for backward compat */
-export type SolverResult = EulerQApiResponse;
+export type JobStatus = "PENDING" | "COMPLETED" | "FAILED";
 
-// ─────────────────────────────────────────────────────────────
-// Derived — per-vehicle route summary
-// Shared output contract for ALL three solvers (naive, greedy, eulerq)
-// ─────────────────────────────────────────────────────────────
+export interface JobPollResponse {
+    jobId: string;
+    status: JobStatus;
+    solveTimeMs?: number;
+    result?: RouteResult[];
+    message?: string;
+}
+
+
+export interface RouteResult {
+    rider_id: string;
+    route: string[];
+    distance: number;
+}
+
 export interface VehicleRoute {
-    vehicleId: number;
-    route: number[];          // ordered node IDs including depot at start AND end
-    totalDistance: number;    // sum of all leg distances
-    totalLoad: number;        // sum of pickup_load for all stops (excl. depot)
-    legDistances: number[];   // distance for each leg: legDistances[k] = dist(route[k], route[k+1])
-}
-
-/** Alias kept for RouteAssignment references in older code */
-export interface RouteAssignment {
-    vehicleId: number;
-    route: number[];
+    vehicleId: string;
+    route: string[];
     totalDistance: number;
+    totalLoad: number;
+    legDistances: number[];
     numStops: number;
 }
 
-// ─────────────────────────────────────────────────────────────
-// UI state
-// ─────────────────────────────────────────────────────────────
+export interface RouteAssignment {
+    vehicleId: string;
+    route: string[];
+    totalDistance: number;
+    totalLoad: number;
+    numStops: number;
+    capacity: number;
+    isOverCapacity: boolean;
+}
+
+
+export interface ExcelParseResult {
+    nodes: Node[];
+    instance: CVRPInstance;
+    errors: ValidationError[];
+}
+
 export type SolverName = "naive" | "greedy" | "eulerq";
 export type InputMode = "generate" | "upload";
 export type BaselineName = "naive" | "greedy";
 
-// ─────────────────────────────────────────────────────────────
-// Metrics bar  (computed after solve)
-// ─────────────────────────────────────────────────────────────
+
 export interface SolveMetrics {
+    baselineSolverName: BaselineName;
     baselineObjective: number;
-    baselineTime: number;     // ms
+    baselineTime: number;
+    naiveTime: number;
+    greedyTime: number;
     eulerQObjective: number;
-    eulerQTime: number;       // ms
+    eulerQTime: number;
     improvementPercent: number;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Validation
-// ─────────────────────────────────────────────────────────────
 export interface ValidationError {
     field: string;
     message: string;
 }
 
-// ─────────────────────────────────────────────────────────────
-// generateInstance() params  (used by generator.ts)
-// ─────────────────────────────────────────────────────────────
 export interface GenerateParams {
     numVehicles: number;
     numPickups: number;
-    rawCapacity: string;    // raw text field value e.g. "10" or "10,12,8"
-    rawPickupLoad: string;  // raw text field value e.g. "2,3,1,4,2,1,3,2"
+    vehicleCapacity: number | number[];
+    pickupLoad: number[];
+}
+
+export interface EulerQApiResponse {
+    solveTimeMs: number;
+    objectiveValue: number;
+    routeResults: RouteResult[];
 }

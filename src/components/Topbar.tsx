@@ -132,26 +132,22 @@ export default function Topbar({
 
                 {hasResults && (
                     <button
-                        onClick={onReset}
+                        onClick={() => window.location.reload()}
                         className="
-              h-9
-              px-4
-              rounded-lg
-
-              border border-[#1e293b]
-
-              bg-[#081225]
-
-              hover:bg-[#0d1a33]
-
-              transition-all duration-200
-
-              text-sm
-              text-[#dbe4ee]
-            "
+      h-9
+      px-4
+      rounded-lg
+      border border-[#1e293b]
+      bg-[#081225]
+      hover:bg-[#0d1a33]
+      transition-all duration-200
+      text-sm
+      text-[#dbe4ee]
+    "
                     >
                         Reset
                     </button>
+
                 )}
             </div>
         </header>

@@ -93,7 +93,7 @@ export default function MetricsBar({
             <div className="w-full h-full flex gap-4">
                 <MetricCard
                     title="Baseline Distance"
-                    value={`${baselineObjective.toFixed(1)} m`}
+                    value={`${(baselineObjective / 1000).toFixed(2)} km`}
                     accent="bg-orange-500/10 text-white border border-orange-500/20"
                     icon={<Route className="w-5 h-5" />}
                 />
@@ -107,7 +107,7 @@ export default function MetricsBar({
 
                 <MetricCard
                     title="EulerQ Distance"
-                    value={`${eulerQObjective.toFixed(1)} m`}
+                    value={`${(eulerQObjective / 1000).toFixed(2)} km`}
                     accent="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"
                     icon={<Zap className="w-5 h-5" />}
                 />

@@ -47,7 +47,7 @@ export default function AboutModal({ onClose }: AboutModalProps) {
           shrink-0
         ">
                     <div className="flex items-center gap-3">
-                        {/* ΣQ Icon — matches screenshot exactly */}
+
                         <div className="
               w-10 h-10
               rounded-xl
@@ -88,10 +88,10 @@ export default function AboutModal({ onClose }: AboutModalProps) {
                     </button>
                 </div>
 
-                {/* ── BODY ── */}
+
                 <div className="overflow-y-auto px-6 py-5 space-y-7 flex-1">
 
-                    {/* WHAT IS CVRP? */}
+
                     <Section title="What is CVRP?">
                         <p className="text-[13.5px] leading-[1.8] text-[#94aac4]">
                             <span className="font-semibold text-[#cdd9e8]">
@@ -108,7 +108,6 @@ export default function AboutModal({ onClose }: AboutModalProps) {
                         </p>
                     </Section>
 
-                    {/* SOLVERS BEING COMPARED */}
                     <Section title="Solvers Being Compared">
                         <div className="space-y-3">
                             <SolverCard accent="orange" label="Naive Solver">
@@ -130,7 +129,7 @@ export default function AboutModal({ onClose }: AboutModalProps) {
                         </div>
                     </Section>
 
-                    {/* DEMO FEATURES */}
+
                     <Section title="Demo Features">
                         <ul className="space-y-2">
                             {[
@@ -151,7 +150,6 @@ export default function AboutModal({ onClose }: AboutModalProps) {
 
 
 
-                    {/* EXCEL UPLOAD MODE */}
                     <Section title="Excel Upload Mode">
                         <p className="text-[13.5px] leading-[1.8] text-[#94aac4]">
                             Users can upload a structured Excel workbook containing up to
@@ -177,7 +175,7 @@ export default function AboutModal({ onClose }: AboutModalProps) {
     );
 }
 
-/* ── SECTION ── */
+
 function Section({
     title,
     children,
@@ -187,7 +185,7 @@ function Section({
 }) {
     return (
         <section>
-            {/* Section title — small caps teal, matches screenshot exactly */}
+
             <h3 className="
         mb-3
         text-[10.5px]
@@ -203,7 +201,6 @@ function Section({
     );
 }
 
-/* ── SOLVER CARD ── matches the left-border accent card in screenshot ── */
 function SolverCard({
     label,
     accent,
