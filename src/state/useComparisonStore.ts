@@ -1,143 +1,148 @@
-// src/state/useComparisonStore.ts
-
 import { create } from "zustand";
 
 import type {
-    Node,
-    CVRPInstance,
-    InputMode,
-    BaselineName,
-    SolveMetrics,
-    RouteAssignment,
+  Node,
+  CVRPInstance,
+  InputMode,
+  BaselineName,
+  SolveMetrics,
+  RouteAssignment,
+  VehicleRoute,
 } from "../types/cvrp";
 
-// ─────────────────────────────────────────────────────────────
-// Store shape
-// ─────────────────────────────────────────────────────────────
 interface ComparisonStore {
-    // ── Input mode ────────────────────────────────────────────
-    inputMode: InputMode;
-    setInputMode: (mode: InputMode) => void;
+  inputMode: InputMode;
+  setInputMode: (mode: InputMode) => void;
 
-    // ── Baseline solver toggle ────────────────────────────────
-    baselineSolver: BaselineName;
-    setBaselineSolver: (solver: BaselineName) => void;
+  baselineSolver: BaselineName;
+  setBaselineSolver: (solver: BaselineName) => void;
 
-    // ── Generated / uploaded data ─────────────────────────────
-    nodes: Node[];
-    setNodes: (nodes: Node[]) => void;
+  nodes: Node[];
+  setNodes: (nodes: Node[]) => void;
 
-    instance: CVRPInstance | null;
-    setInstance: (instance: CVRPInstance | null) => void;
+  instance: CVRPInstance | null;
+  setInstance: (instance: CVRPInstance | null) => void;
 
-    // ── Solve results ─────────────────────────────────────────
-    /**
-     * True once BOTH baseline and EulerQ routes have been set.
-     * Controls solver dot active state, metrics banner visibility,
-     * and assignments panel content.
-     */
-    hasResults: boolean;
+  hasResults: boolean;
 
-    /** Ordered node-ID arrays per vehicle, e.g. [[0,2,4,0],[0,1,3,0]] */
-    baselineRoutes: number[][] | null;
-    setBaselineRoutes: (routes: number[][] | null) => void;
+  naiveRoutes: VehicleRoute[] | null;
+  setNaiveRoutes: (routes: VehicleRoute[] | null) => void;
 
-    eulerqRoutes: number[][] | null;
-    setEulerqRoutes: (routes: number[][] | null) => void;
+  naiveAssignments: RouteAssignment[] | null;
+  setNaiveAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    /** Derived per-vehicle details — populated alongside *Routes setters */
-    baselineAssignments: RouteAssignment[] | null;
-    setBaselineAssignments: (assignments: RouteAssignment[] | null) => void;
+  greedyRoutes: VehicleRoute[] | null;
+  setGreedyRoutes: (routes: VehicleRoute[] | null) => void;
 
-    eulerqAssignments: RouteAssignment[] | null;
-    setEulerqAssignments: (assignments: RouteAssignment[] | null) => void;
+  greedyAssignments: RouteAssignment[] | null;
+  setGreedyAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    metrics: SolveMetrics | null;
-    setMetrics: (metrics: SolveMetrics | null) => void;
+  eulerqRoutes: VehicleRoute[] | null;
+  setEulerqRoutes: (routes: VehicleRoute[] | null) => void;
 
-    // ── Loading ───────────────────────────────────────────────
-    isLoading: boolean;
-    setLoading: (loading: boolean) => void;
+  eulerqAssignments: RouteAssignment[] | null;
+  setEulerqAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    // ── Full reset ────────────────────────────────────────────
-    resetAll: () => void;
+  metrics: SolveMetrics | null;
+  setMetrics: (metrics: SolveMetrics | null) => void;
+
+  setResults: (payload: {
+    naiveRoutes: VehicleRoute[];
+    naiveAssignments: RouteAssignment[];
+    greedyRoutes: VehicleRoute[];
+    greedyAssignments: RouteAssignment[];
+    eulerqRoutes: VehicleRoute[];
+    eulerqAssignments: RouteAssignment[];
+    metrics: SolveMetrics;
+  }) => void;
+
+  isLoading: boolean;
+  setLoading: (loading: boolean) => void;
+
+  solveError: string | null;
+  setSolveError: (error: string | null) => void;
+
+  resetAll: () => void;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Store
-// ─────────────────────────────────────────────────────────────
-export const useComparisonStore = create<ComparisonStore>((set, get) => ({
-    // ── Initial state ─────────────────────────────────────────
-    inputMode: "generate",
-    baselineSolver: "naive",
+const INITIAL_STATE = {
+  inputMode: "generate" as InputMode,
+  baselineSolver: "naive" as BaselineName,
+  nodes: [] as Node[],
+  instance: null,
+  hasResults: false,
+  naiveRoutes: null,
+  naiveAssignments: null,
+  greedyRoutes: null,
+  greedyAssignments: null,
+  eulerqRoutes: null,
+  eulerqAssignments: null,
+  metrics: null,
+  isLoading: false,
+  solveError: null,
+};
 
-    nodes: [],
-    instance: null,
+export const useComparisonStore = create<ComparisonStore>((set) => ({
+  ...INITIAL_STATE,
 
-    hasResults: false,
-    baselineRoutes: null,
-    eulerqRoutes: null,
-    baselineAssignments: null,
-    eulerqAssignments: null,
-    metrics: null,
+  setInputMode: (mode) => set({ inputMode: mode }),
 
-    isLoading: false,
+  setBaselineSolver: (solver) => set({ baselineSolver: solver }),
 
-    // ── Actions ───────────────────────────────────────────────
-    setInputMode: (mode) => set({ inputMode: mode }),
+  setNodes: (nodes) => set({ nodes }),
 
-    setBaselineSolver: (solver) => set({ baselineSolver: solver }),
+  setInstance: (instance) => set({ instance }),
 
-    setNodes: (nodes) => set({ nodes }),
+  setNaiveRoutes: (routes) => set({ naiveRoutes: routes }),
+  setNaiveAssignments: (assignments) => set({ naiveAssignments: assignments }),
 
-    setInstance: (instance) => set({ instance }),
+  setGreedyRoutes: (routes) => set({ greedyRoutes: routes }),
+  setGreedyAssignments: (assignments) =>
+    set({ greedyAssignments: assignments }),
 
-    /**
-     * Setting baseline routes also re-evaluates hasResults:
-     * results are considered available when BOTH baseline AND
-     * eulerq routes are non-empty.
-     */
-    setBaselineRoutes: (routes) =>
-        set((state) => ({
-            baselineRoutes: routes,
-            hasResults:
-                !!(routes && routes.length > 0) &&
-                !!(state.eulerqRoutes && state.eulerqRoutes.length > 0),
-        })),
+  setEulerqRoutes: (routes) => set({ eulerqRoutes: routes }),
+  setEulerqAssignments: (assignments) =>
+    set({ eulerqAssignments: assignments }),
 
-    /**
-     * Setting eulerq routes also re-evaluates hasResults.
-     */
-    setEulerqRoutes: (routes) =>
-        set((state) => ({
-            eulerqRoutes: routes,
-            hasResults:
-                !!(routes && routes.length > 0) &&
-                !!(state.baselineRoutes && state.baselineRoutes.length > 0),
-        })),
+  setMetrics: (metrics) => set({ metrics }),
 
-    setBaselineAssignments: (assignments) =>
-        set({ baselineAssignments: assignments }),
+  setResults: ({
+    naiveRoutes,
+    naiveAssignments,
+    greedyRoutes,
+    greedyAssignments,
+    eulerqRoutes,
+    eulerqAssignments,
+    metrics,
+  }) =>
+    set({
+      naiveRoutes,
+      naiveAssignments,
+      greedyRoutes,
+      greedyAssignments,
+      eulerqRoutes,
+      eulerqAssignments,
+      metrics,
+      hasResults:
+        naiveRoutes.length > 0 &&
+        greedyRoutes.length > 0 &&
+        eulerqRoutes.length > 0,
+      solveError: null,
+    }),
 
-    setEulerqAssignments: (assignments) =>
-        set({ eulerqAssignments: assignments }),
+  setLoading: (loading) => set({ isLoading: loading }),
 
-    setMetrics: (metrics) => set({ metrics }),
+  setSolveError: (error) => set({ solveError: error }),
 
-    setLoading: (loading) => set({ isLoading: loading }),
-
-    resetAll: () =>
-        set({
-            inputMode: "generate",
-            baselineSolver: "naive",
-            nodes: [],
-            instance: null,
-            hasResults: false,
-            baselineRoutes: null,
-            eulerqRoutes: null,
-            baselineAssignments: null,
-            eulerqAssignments: null,
-            metrics: null,
-            isLoading: false,
-        }),
+  resetAll: () => set({ ...INITIAL_STATE }),
 }));
+
+export const selectActiveBaselineRoutes = (
+  s: ComparisonStore,
+): VehicleRoute[] | null =>
+  s.baselineSolver === "naive" ? s.naiveRoutes : s.greedyRoutes;
+
+export const selectActiveBaselineAssignments = (
+  s: ComparisonStore,
+): RouteAssignment[] | null =>
+  s.baselineSolver === "naive" ? s.naiveAssignments : s.greedyAssignments;
