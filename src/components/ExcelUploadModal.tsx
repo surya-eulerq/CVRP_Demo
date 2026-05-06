@@ -32,13 +32,12 @@ const ACCEPTED_EXTENSIONS: Record<"excel" | "csv", string[]> = {
 type UploadType = "excel" | "csv";
 
 interface ExcelUploadModalProps {
-  /** Controls visibility */
   isOpen: boolean;
-  /** Called when user closes/cancels */
+
   onClose: () => void;
-  /** Called when user confirms upload — do NOT call onClose() inside onUpload */
+
   onUpload: (file: File) => void;
-  /** True while parent is parsing — locks the modal UI */
+
   isParsing?: boolean;
 }
 
@@ -62,10 +61,6 @@ function validateFile(file: File, type: UploadType): string | null {
   }
   return null;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
 
 const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
   isOpen,
@@ -97,7 +92,10 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     }
   }
 
-  function handleFileChange(e: ChangeEvent<HTMLInputElement>, type: UploadType) {
+  function handleFileChange(
+    e: ChangeEvent<HTMLInputElement>,
+    type: UploadType,
+  ) {
     const selected = e.target.files?.[0];
     if (selected) applyFile(selected, type);
     e.target.value = ""; // reset so same file can be re-selected
@@ -153,8 +151,6 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
     return classes.join(" ");
   }
 
-  // ── Overlay click — dismiss only when not parsing ─────────────────────────
-
   function handleOverlayClick() {
     if (!isParsing) onClose();
   }
@@ -172,7 +168,6 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
       aria-label="Upload data file"
     >
       <div className="eum-modal" onClick={(e) => e.stopPropagation()}>
-
         {/* Hidden file inputs */}
         <input
           ref={excelInputRef}
@@ -210,8 +205,6 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
 
         {/* ── Body ─────────────────────────────────────────────────────── */}
         {uploadSuccess && !isParsing ? (
-
-          /* Success state */
           <div className="eum-body">
             <div className="eum-success">
               <div className="eum-success-icon">
@@ -221,18 +214,12 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
               <p className="eum-success-sub">{file?.name}</p>
             </div>
           </div>
-
         ) : (
-
           <div className="eum-body">
-
             {/* Section label */}
             <span className="eum-section-label">Choose format</span>
 
-            {/* Upload option cards */}
             <div className="eum-options-grid">
-
-              {/* Excel card */}
               <div
                 className={cardClass("excel")}
                 role="button"
@@ -244,7 +231,11 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                 onDragOver={(e) => handleDragOver(e, "excel")}
                 onDragLeave={handleDragLeave}
                 onKeyDown={(e) => e.key === "Enter" && handleCardClick("excel")}
-                style={isParsing ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                style={
+                  isParsing
+                    ? { pointerEvents: "none", opacity: 0.5 }
+                    : undefined
+                }
               >
                 <div className="eum-option-icon-wrap">
                   <RiFileExcel2Line />
@@ -268,7 +259,11 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                 onDragOver={(e) => handleDragOver(e, "csv")}
                 onDragLeave={handleDragLeave}
                 onKeyDown={(e) => e.key === "Enter" && handleCardClick("csv")}
-                style={isParsing ? { pointerEvents: "none", opacity: 0.5 } : undefined}
+                style={
+                  isParsing
+                    ? { pointerEvents: "none", opacity: 0.5 }
+                    : undefined
+                }
               >
                 <div className="eum-option-icon-wrap">
                   <RiFileLine />
@@ -279,7 +274,6 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                 </div>
                 <div className="eum-option-badge">CSV</div>
               </div>
-
             </div>
 
             {/* File preview — shown once a file is selected */}
@@ -292,7 +286,9 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
                   </div>
                   <div className="eum-file-preview-meta">
                     <span className="eum-file-preview-name">{file.name}</span>
-                    <span className="eum-file-preview-size">{formatBytes(file.size)}</span>
+                    <span className="eum-file-preview-size">
+                      {formatBytes(file.size)}
+                    </span>
                   </div>
                   <div className="eum-file-preview-actions">
                     {isParsing ? (
@@ -353,7 +349,10 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
               </div>
               <div className="eum-callout-footer">
                 <span className="eum-callout-dot" />
-                <span>Points must be within <strong>Bengaluru</strong> region · Max <strong>20 KB</strong></span>
+                <span>
+                  Points must be within <strong>Bengaluru</strong> region · Max{" "}
+                  <strong>20 KB</strong>
+                </span>
               </div>
             </div>
           </div>
@@ -378,7 +377,6 @@ const ExcelUploadModal: React.FC<ExcelUploadModalProps> = ({
             {isParsing ? "Parsing…" : "Load & Use Data"}
           </button>
         </div>
-
       </div>
     </div>
   );

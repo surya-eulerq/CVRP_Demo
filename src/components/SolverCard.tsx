@@ -7,258 +7,255 @@ import type { Node, VehicleRoute } from "../types/cvrp";
 // Palette constants
 // ─────────────────────────────────────────────────────────────
 const WARM_PALETTE = [
-    "#f97316", "#ef4444", "#eab308", "#f59e0b",
-    "#fb923c", "#dc2626", "#ca8a04", "#d97706",
+  "#f97316",
+  "#ef4444",
+  "#eab308",
+  "#f59e0b",
+  "#fb923c",
+  "#dc2626",
+  "#ca8a04",
+  "#d97706",
 ];
 const COOL_PALETTE = [
-    "#10E0A1", "#14b8a6", "#06b6d4", "#0ea5e9",
-    "#22d3ee", "#38bdf8", "#6ee7b7", "#5eead4",
+  "#10E0A1",
+  "#14b8a6",
+  "#06b6d4",
+  "#0ea5e9",
+  "#22d3ee",
+  "#38bdf8",
+  "#6ee7b7",
+  "#5eead4",
 ];
 
 // ─────────────────────────────────────────────────────────────
 // Internal: Spinner
 // ─────────────────────────────────────────────────────────────
-function Spinner({ size = 48, color = "#10E0A1" }: { size?: number; color?: string }) {
-    return (
-        <svg
-            width={size}
-            height={size}
-            viewBox="0 0 40 40"
-            style={{
-                animation:
-                    "sc-spin 0.9s linear infinite, sc-loader-glow 1.4s ease-in-out infinite"
-            }}
-        >
-            <circle
-                cx="20" cy="20" r="16"
-                fill="none" stroke={color}
-                strokeWidth="3" strokeDasharray="60 40"
-                strokeLinecap="round"
-            />
-        </svg>
-    );
+function Spinner({
+  size = 48,
+  color = "#10E0A1",
+}: {
+  size?: number;
+  color?: string;
+}) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 40 40"
+      style={{
+        animation:
+          "sc-spin 0.9s linear infinite, sc-loader-glow 1.4s ease-in-out infinite",
+      }}
+    >
+      <circle
+        cx="20"
+        cy="20"
+        r="16"
+        fill="none"
+        stroke={color}
+        strokeWidth="3"
+        strokeDasharray="60 40"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 // ─────────────────────────────────────────────────────────────
 // Internal: Solver Running Overlay
 // ─────────────────────────────────────────────────────────────
 function SolverRunningOverlay({ accent }: { accent: "orange" | "teal" }) {
-    const color = accent === "orange" ? "#f97316" : "#f97316";
-    return (
-        <div className="sc-overlay">
-            <Spinner size={48} color={color} />
-            <span className="sc-overlay-label">SOLVER RUNNING</span>
-        </div>
-    );
+  const color = accent === "orange" ? "#f97316" : "#f97316";
+  return (
+    <div className="sc-overlay">
+      <Spinner size={48} color={color} />
+      <span className="sc-overlay-label">SOLVER RUNNING</span>
+    </div>
+  );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Internal: Assignment Rows
-// V1.1: VehicleRoute.route is string[] (IDs like "DEPOT", "P001").
-// We build a string-ID → Node map for label/display lookups.
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Build a map from string stop ID → Node.
- * Mirrors the ID scheme in generator.ts:
- *   node at index 0 → "DEPOT"
- *   node at index i → "P" + padStart(3, "0")
- */
 function buildNodeMap(nodes: Node[]): Map<string, Node> {
-    const map = new Map<string, Node>();
-    nodes.forEach((node, i) => {
-        const key = i === 0 ? "DEPOT" : `P${String(i).padStart(3, "0")}`;
-        map.set(key, node);
-    });
-    return map;
+  const map = new Map<string, Node>();
+  nodes.forEach((node, i) => {
+    const key = i === 0 ? "DEPOT" : `P${String(i).padStart(3, "0")}`;
+    map.set(key, node);
+  });
+  return map;
 }
 
 interface AssignmentsRowsProps {
-    routes: VehicleRoute[];
-    nodes: Node[];
-    palette: "warm" | "cool";
-    activeVehicleIdx: number | null;
-    onVehicleClick: (idx: number | null) => void;
+  routes: VehicleRoute[];
+  nodes: Node[];
+  palette: "warm" | "cool";
+  activeVehicleIdx: number | null;
+  onVehicleClick: (idx: number | null) => void;
 }
 
 function AssignmentsRows({
-    routes,
-    nodes,
-    palette,
-    activeVehicleIdx,
-    onVehicleClick,
+  routes,
+  nodes,
+  palette,
+  activeVehicleIdx,
+  onVehicleClick,
 }: AssignmentsRowsProps) {
-    const colors = palette === "warm" ? WARM_PALETTE : COOL_PALETTE;
+  const colors = palette === "warm" ? WARM_PALETTE : COOL_PALETTE;
 
-    if (!routes || routes.length === 0) {
-        return <div className="sc-assignments-empty">No assignments yet.</div>;
-    }
+  if (!routes || routes.length === 0) {
+    return <div className="sc-assignments-empty">No assignments yet.</div>;
+  }
 
-    // V1.1: build once for the whole list
-    const nodeMap = buildNodeMap(nodes);
+  const nodeMap = buildNodeMap(nodes);
 
-    return (
-        <>
-            {routes.map((vr, idx) => {
-                const color = colors[idx % colors.length];
-                const isActive = activeVehicleIdx === idx;
-                const activeClass = isActive
-                    ? palette === "warm"
-                        ? "sc-row-active-warm"
-                        : "sc-row-active-cool"
-                    : "";
+  return (
+    <>
+      {routes.map((vr, idx) => {
+        const color = colors[idx % colors.length];
+        const isActive = activeVehicleIdx === idx;
+        const activeClass = isActive
+          ? palette === "warm"
+            ? "sc-row-active-warm"
+            : "sc-row-active-cool"
+          : "";
 
-                // V1.1: route is string[]; exclude depot stops (first & last)
-                const stopIds = (vr.route ?? []).filter((id) => id !== "DEPOT");
+        const stopIds = (vr.route ?? []).filter((id) => id !== "DEPOT");
 
-                // Display label: use the pickup ID directly (e.g. "P001")
-                // or fall back gracefully for any custom IDs
-                const stopLabels = stopIds.map((id) => {
-                    const node = nodeMap.get(id);
-                    if (node) {
-                        // Re-derive a display label consistent with old "O001" style
-                        // using the node's numeric id (index in nodes array)
-                        return `O${String(node.id).padStart(3, "0")}`;
-                    }
-                    // Fallback: show the raw pickup ID
-                    return id;
-                });
+        const stopLabels = stopIds.map((id) => {
+          const node = nodeMap.get(id);
+          if (node) {
+            return `O${String(node.id).padStart(3, "0")}`;
+          }
 
-                // V1.1: vehicleId is carried directly on VehicleRoute
-                const riderId = vr.vehicleId ?? `R${String(idx + 1).padStart(3, "0")}`;
-                const count = stopLabels.length;
+          return id;
+        });
 
-                return (
-                    <div
-                        key={idx}
-                        className={`sc-assignment-row ${activeClass}`}
-                        onClick={() => onVehicleClick(isActive ? null : idx)}
-                    >
+        const riderId = vr.vehicleId ?? `R${String(idx + 1).padStart(3, "0")}`;
+        const count = stopLabels.length;
 
-                        <span className={`sc-assign-rider-id sc-rider-${palette}`}>{riderId}</span>
-                        <span className="sc-assign-orders">
-                            {stopLabels.length > 0 ? stopLabels.join("   ") : "—"}
-                        </span>
-                        <span className="sc-assign-count">{count}</span>
-                    </div>
-                );
-            })}
-        </>
-    );
+        return (
+          <div
+            key={idx}
+            className={`sc-assignment-row ${activeClass}`}
+            onClick={() => onVehicleClick(isActive ? null : idx)}
+          >
+            <span className={`sc-assign-rider-id sc-rider-${palette}`}>
+              {riderId}
+            </span>
+            <span className="sc-assign-orders">
+              {stopLabels.length > 0 ? stopLabels.join("   ") : "—"}
+            </span>
+            <span className="sc-assign-count">{count}</span>
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
-// ─────────────────────────────────────────────────────────────
-// SolverCard Props
-// ─────────────────────────────────────────────────────────────
 export interface SolverCardProps {
-    title: string;
-    accent: "orange" | "teal";
-    rightAction?: ReactNode;
-    isSolving: boolean;
-    showResults: boolean;
-    objective?: number;
-    solveTimeMs?: number;
-    map: ReactNode;
-    routes: VehicleRoute[];
-    nodes: Node[];
-    activeVehicleIdx: number | null;
-    onVehicleClick: (idx: number | null) => void;
-    fleetDistance: number;
+  title: string;
+  accent: "orange" | "teal";
+  rightAction?: ReactNode;
+  isSolving: boolean;
+  showResults: boolean;
+  objective?: number;
+  solveTimeMs?: number;
+  map: ReactNode;
+  routes: VehicleRoute[];
+  nodes: Node[];
+  activeVehicleIdx: number | null;
+  onVehicleClick: (idx: number | null) => void;
+  fleetDistance: number;
 }
 
-// ─────────────────────────────────────────────────────────────
-// SolverCard
-// ─────────────────────────────────────────────────────────────
 export default function SolverCard({
-    title,
-    accent,
-    rightAction,
-    isSolving,
-    showResults,
-    objective,
-    solveTimeMs,
-    map,
-    routes,
-    nodes,
-    activeVehicleIdx,
-    onVehicleClick,
-    fleetDistance,
+  title,
+  accent,
+  rightAction,
+  isSolving,
+  showResults,
+  objective,
+  solveTimeMs,
+  map,
+  routes,
+  nodes,
+  activeVehicleIdx,
+  onVehicleClick,
+  fleetDistance,
 }: SolverCardProps) {
-    const palette = accent === "orange" ? "warm" : "cool";
-    const chipSpinnerColor = accent === "orange" ? "var(--text2)" : "var(--accent)";
+  const palette = accent === "orange" ? "warm" : "cool";
+  const chipSpinnerColor =
+    accent === "orange" ? "var(--text2)" : "var(--accent)";
 
-    const dotClass = showResults
-        ? accent === "orange"
-            ? "sc-dot-active-orange"
-            : "sc-dot-active-teal"
-        : isSolving
-            ? accent === "orange"
-                ? "sc-dot-pulse-orange"
-                : "sc-dot-pulse-teal"
-            : "sc-dot-inactive";
+  const dotClass = showResults
+    ? accent === "orange"
+      ? "sc-dot-active-orange"
+      : "sc-dot-active-teal"
+    : isSolving
+      ? accent === "orange"
+        ? "sc-dot-pulse-orange"
+        : "sc-dot-pulse-teal"
+      : "sc-dot-inactive";
 
-    return (
-        <div className={`sc-card sc-card-${accent}`}>
-
-            {/* ── Header ── */}
-            <div className="sc-header">
-                <div className="sc-title-wrap">
-                    <div className={`sc-dot ${dotClass}`} />
-                    <span className="sc-title">{title}</span>
-                </div>
-
-                <div className="sc-header-right">
-                    {isSolving && (
-                        <div className="sc-status-chip">
-                            <svg
-                                className="sc-chip-spinner"
-                                width="14" height="14"
-                                viewBox="0 0 40 40"
-                            >
-                                <circle
-                                    cx="20" cy="20" r="16"
-                                    fill="none" stroke={chipSpinnerColor}
-                                    strokeWidth="4" strokeDasharray="60 40"
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            SOLVING
-                        </div>
-                    )}
-                    {rightAction && <div>{rightAction}</div>}
-                </div>
-            </div>
-
-            {/* ── Map (always visible; blurred while solving) ── */}
-            <div className="sc-map-wrap">
-                <div className={isSolving ? "sc-map-blur-layer" : "sc-map-normal"}>
-                    {map}
-                </div>
-                {isSolving && (
-                    <SolverRunningOverlay accent={accent} />
-                )}
-            </div>
-
-            {/* ── Assignments + Fleet Distance (shown only after results) ── */}
-            {showResults && (
-                <div className="sc-assignments-wrap">
-                    <div className="sc-assignments-header">
-                        <span className="sc-assignments-label">ASSIGNMENTS</span>
-                    </div>
-
-                    <div className="sc-assignments-scroll">
-                        <AssignmentsRows
-                            routes={routes}
-                            nodes={nodes}
-                            palette={palette}
-                            activeVehicleIdx={activeVehicleIdx}
-                            onVehicleClick={onVehicleClick}
-                        />
-                    </div>
-
-
-                </div>
-            )}
+  return (
+    <div className={`sc-card sc-card-${accent}`}>
+      {/* ── Header ── */}
+      <div className="sc-header">
+        <div className="sc-title-wrap">
+          <div className={`sc-dot ${dotClass}`} />
+          <span className="sc-title">{title}</span>
         </div>
-    );
+
+        <div className="sc-header-right">
+          {isSolving && (
+            <div className="sc-status-chip">
+              <svg
+                className="sc-chip-spinner"
+                width="14"
+                height="14"
+                viewBox="0 0 40 40"
+              >
+                <circle
+                  cx="20"
+                  cy="20"
+                  r="16"
+                  fill="none"
+                  stroke={chipSpinnerColor}
+                  strokeWidth="4"
+                  strokeDasharray="60 40"
+                  strokeLinecap="round"
+                />
+              </svg>
+              SOLVING
+            </div>
+          )}
+          {rightAction && <div>{rightAction}</div>}
+        </div>
+      </div>
+
+      <div className="sc-map-wrap">
+        <div className={isSolving ? "sc-map-blur-layer" : "sc-map-normal"}>
+          {map}
+        </div>
+        {isSolving && <SolverRunningOverlay accent={accent} />}
+      </div>
+
+      {showResults && (
+        <div className="sc-assignments-wrap">
+          <div className="sc-assignments-header">
+            <span className="sc-assignments-label">ASSIGNMENTS</span>
+          </div>
+
+          <div className="sc-assignments-scroll">
+            <AssignmentsRows
+              routes={routes}
+              nodes={nodes}
+              palette={palette}
+              activeVehicleIdx={activeVehicleIdx}
+              onVehicleClick={onVehicleClick}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

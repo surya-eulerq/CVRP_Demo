@@ -1,214 +1,148 @@
-// src/state/useComparisonStore.ts
-// ─────────────────────────────────────────────────────────────
-// Zustand store — single source of truth for the CVRP demo.
-// ─────────────────────────────────────────────────────────────
-
 import { create } from "zustand";
 
 import type {
-    Node,
-    CVRPInstance,
-    InputMode,
-    BaselineName,
-    SolveMetrics,
-    RouteAssignment,
-    VehicleRoute,
+  Node,
+  CVRPInstance,
+  InputMode,
+  BaselineName,
+  SolveMetrics,
+  RouteAssignment,
+  VehicleRoute,
 } from "../types/cvrp";
 
-// ─────────────────────────────────────────────────────────────
-// Store shape
-// ─────────────────────────────────────────────────────────────
-
 interface ComparisonStore {
-    // ── Input mode ────────────────────────────────────────────
-    inputMode: InputMode;
-    setInputMode: (mode: InputMode) => void;
+  inputMode: InputMode;
+  setInputMode: (mode: InputMode) => void;
 
-    // ── Baseline solver toggle ────────────────────────────────
-    /**
-     * Controls which baseline is shown on the LEFT map pane.
-     * Switching this never triggers a re-solve — both baselines are
-     * pre-computed and stored separately (see naiveRoutes / greedyRoutes).
-     */
-    baselineSolver: BaselineName;
-    setBaselineSolver: (solver: BaselineName) => void;
+  baselineSolver: BaselineName;
+  setBaselineSolver: (solver: BaselineName) => void;
 
-    // ── Generated / uploaded data ─────────────────────────────
-    nodes: Node[];
-    setNodes: (nodes: Node[]) => void;
+  nodes: Node[];
+  setNodes: (nodes: Node[]) => void;
 
-    instance: CVRPInstance | null;
-    setInstance: (instance: CVRPInstance | null) => void;
+  instance: CVRPInstance | null;
+  setInstance: (instance: CVRPInstance | null) => void;
 
-    // ── Solve results ─────────────────────────────────────────
+  hasResults: boolean;
 
-    /**
-     * True once ALL three solvers have completed successfully.
-     * Gates: metrics bar visibility, assignment panels, download button.
-     */
-    hasResults: boolean;
+  naiveRoutes: VehicleRoute[] | null;
+  setNaiveRoutes: (routes: VehicleRoute[] | null) => void;
 
-    /**
-     * Naive solver routes — stored independently so toggling the
-     * baseline toggle never triggers a re-solve.
-     */
-    naiveRoutes: VehicleRoute[] | null;
-    setNaiveRoutes: (routes: VehicleRoute[] | null) => void;
+  naiveAssignments: RouteAssignment[] | null;
+  setNaiveAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    naiveAssignments: RouteAssignment[] | null;
-    setNaiveAssignments: (assignments: RouteAssignment[] | null) => void;
+  greedyRoutes: VehicleRoute[] | null;
+  setGreedyRoutes: (routes: VehicleRoute[] | null) => void;
 
-    /**
-     * Greedy solver routes — stored independently for the same reason.
-     */
-    greedyRoutes: VehicleRoute[] | null;
-    setGreedyRoutes: (routes: VehicleRoute[] | null) => void;
+  greedyAssignments: RouteAssignment[] | null;
+  setGreedyAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    greedyAssignments: RouteAssignment[] | null;
-    setGreedyAssignments: (assignments: RouteAssignment[] | null) => void;
+  eulerqRoutes: VehicleRoute[] | null;
+  setEulerqRoutes: (routes: VehicleRoute[] | null) => void;
 
-    /**
-     * EulerQ solver routes — populated after API polling completes.
-     */
-    eulerqRoutes: VehicleRoute[] | null;
-    setEulerqRoutes: (routes: VehicleRoute[] | null) => void;
+  eulerqAssignments: RouteAssignment[] | null;
+  setEulerqAssignments: (assignments: RouteAssignment[] | null) => void;
 
-    eulerqAssignments: RouteAssignment[] | null;
-    setEulerqAssignments: (assignments: RouteAssignment[] | null) => void;
+  metrics: SolveMetrics | null;
+  setMetrics: (metrics: SolveMetrics | null) => void;
 
-    /**
-     * Derived metrics for the five stat chips in the Metrics Bar.
-     * Recomputed whenever baselineSolver is toggled.
-     */
-    metrics: SolveMetrics | null;
-    setMetrics: (metrics: SolveMetrics | null) => void;
+  setResults: (payload: {
+    naiveRoutes: VehicleRoute[];
+    naiveAssignments: RouteAssignment[];
+    greedyRoutes: VehicleRoute[];
+    greedyAssignments: RouteAssignment[];
+    eulerqRoutes: VehicleRoute[];
+    eulerqAssignments: RouteAssignment[];
+    metrics: SolveMetrics;
+  }) => void;
 
-    /**
-     * Atomic commit — sets all three solvers' routes + assignments + metrics
-     * in ONE state transition to avoid cascading re-renders.
-     * CompareDashboard calls this after naive, greedy, and eulerq all finish.
-     */
-    setResults: (payload: {
-        naiveRoutes: VehicleRoute[];
-        naiveAssignments: RouteAssignment[];
-        greedyRoutes: VehicleRoute[];
-        greedyAssignments: RouteAssignment[];
-        eulerqRoutes: VehicleRoute[];
-        eulerqAssignments: RouteAssignment[];
-        metrics: SolveMetrics;
-    }) => void;
+  isLoading: boolean;
+  setLoading: (loading: boolean) => void;
 
-    // ── Loading ───────────────────────────────────────────────
-    isLoading: boolean;
-    setLoading: (loading: boolean) => void;
+  solveError: string | null;
+  setSolveError: (error: string | null) => void;
 
-    // ── Error handling ────────────────────────────────────────
-    /**
-     * Populated when the EulerQ API call fails (network error, FAILED status,
-     * polling timeout, etc.). Cleared on every new solve attempt and on resetAll.
-     * Surface this as an inline error banner — same as ROA demo.
-     */
-    solveError: string | null;
-    setSolveError: (error: string | null) => void;
-
-    // ── Full reset ────────────────────────────────────────────
-    resetAll: () => void;
+  resetAll: () => void;
 }
 
-// ─────────────────────────────────────────────────────────────
-// Initial state snapshot — extracted so resetAll can reuse it
-// ─────────────────────────────────────────────────────────────
-
 const INITIAL_STATE = {
-    inputMode: "generate" as InputMode,
-    baselineSolver: "naive" as BaselineName,
-    nodes: [] as Node[],
-    instance: null,
-    hasResults: false,
-    naiveRoutes: null,
-    naiveAssignments: null,
-    greedyRoutes: null,
-    greedyAssignments: null,
-    eulerqRoutes: null,
-    eulerqAssignments: null,
-    metrics: null,
-    isLoading: false,
-    solveError: null,
+  inputMode: "generate" as InputMode,
+  baselineSolver: "naive" as BaselineName,
+  nodes: [] as Node[],
+  instance: null,
+  hasResults: false,
+  naiveRoutes: null,
+  naiveAssignments: null,
+  greedyRoutes: null,
+  greedyAssignments: null,
+  eulerqRoutes: null,
+  eulerqAssignments: null,
+  metrics: null,
+  isLoading: false,
+  solveError: null,
 };
 
-// ─────────────────────────────────────────────────────────────
-// Store
-// ─────────────────────────────────────────────────────────────
-
 export const useComparisonStore = create<ComparisonStore>((set) => ({
-    // ── Initial state ─────────────────────────────────────────
-    ...INITIAL_STATE,
+  ...INITIAL_STATE,
 
-    // ── Actions ───────────────────────────────────────────────
+  setInputMode: (mode) => set({ inputMode: mode }),
 
-    setInputMode: (mode) => set({ inputMode: mode }),
+  setBaselineSolver: (solver) => set({ baselineSolver: solver }),
 
-    setBaselineSolver: (solver) => set({ baselineSolver: solver }),
+  setNodes: (nodes) => set({ nodes }),
 
-    setNodes: (nodes) => set({ nodes }),
+  setInstance: (instance) => set({ instance }),
 
-    setInstance: (instance) => set({ instance }),
+  setNaiveRoutes: (routes) => set({ naiveRoutes: routes }),
+  setNaiveAssignments: (assignments) => set({ naiveAssignments: assignments }),
 
-    // Individual route setters — used when updating solvers independently
-    // (e.g. EulerQ result arrives while baseline is already displayed).
-    // hasResults is only flipped to true via setResults (atomic commit).
+  setGreedyRoutes: (routes) => set({ greedyRoutes: routes }),
+  setGreedyAssignments: (assignments) =>
+    set({ greedyAssignments: assignments }),
 
-    setNaiveRoutes: (routes) => set({ naiveRoutes: routes }),
-    setNaiveAssignments: (assignments) => set({ naiveAssignments: assignments }),
+  setEulerqRoutes: (routes) => set({ eulerqRoutes: routes }),
+  setEulerqAssignments: (assignments) =>
+    set({ eulerqAssignments: assignments }),
 
-    setGreedyRoutes: (routes) => set({ greedyRoutes: routes }),
-    setGreedyAssignments: (assignments) => set({ greedyAssignments: assignments }),
+  setMetrics: (metrics) => set({ metrics }),
 
-    setEulerqRoutes: (routes) => set({ eulerqRoutes: routes }),
-    setEulerqAssignments: (assignments) => set({ eulerqAssignments: assignments }),
+  setResults: ({
+    naiveRoutes,
+    naiveAssignments,
+    greedyRoutes,
+    greedyAssignments,
+    eulerqRoutes,
+    eulerqAssignments,
+    metrics,
+  }) =>
+    set({
+      naiveRoutes,
+      naiveAssignments,
+      greedyRoutes,
+      greedyAssignments,
+      eulerqRoutes,
+      eulerqAssignments,
+      metrics,
+      hasResults:
+        naiveRoutes.length > 0 &&
+        greedyRoutes.length > 0 &&
+        eulerqRoutes.length > 0,
+      solveError: null,
+    }),
 
-    setMetrics: (metrics) => set({ metrics }),
+  setLoading: (loading) => set({ isLoading: loading }),
 
-    /**
-     * Atomic commit — called by CompareDashboard once ALL three solvers finish.
-     * Sets every result field in a single state transition so the UI
-     * re-renders exactly once. Also clears any prior solve error.
-     */
-    setResults: ({
-        naiveRoutes,
-        naiveAssignments,
-        greedyRoutes,
-        greedyAssignments,
-        eulerqRoutes,
-        eulerqAssignments,
-        metrics,
-    }) =>
-        set({
-            naiveRoutes,
-            naiveAssignments,
-            greedyRoutes,
-            greedyAssignments,
-            eulerqRoutes,
-            eulerqAssignments,
-            metrics,
-            hasResults: naiveRoutes.length > 0 && greedyRoutes.length > 0 && eulerqRoutes.length > 0,
-            solveError: null,
-        }),
+  setSolveError: (error) => set({ solveError: error }),
 
-    setLoading: (loading) => set({ isLoading: loading }),
-
-    setSolveError: (error) => set({ solveError: error }),
-
-    /** Resets every field back to its initial value. */
-    resetAll: () => set({ ...INITIAL_STATE }),
+  resetAll: () => set({ ...INITIAL_STATE }),
 }));
 
-// ─────────────────────────────────────────────────────────────
-// Derived selectors  (use these in components to avoid inline logic)
-// ─────────────────────────────────────────────────────────────
+export const selectActiveBaselineRoutes = (
+  s: ComparisonStore,
+): VehicleRoute[] | null =>
+  s.baselineSolver === "naive" ? s.naiveRoutes : s.greedyRoutes;
 
-export const selectActiveBaselineRoutes = (s: ComparisonStore): VehicleRoute[] | null =>
-    s.baselineSolver === "naive" ? s.naiveRoutes : s.greedyRoutes;
-
-export const selectActiveBaselineAssignments = (s: ComparisonStore): RouteAssignment[] | null =>
-    s.baselineSolver === "naive" ? s.naiveAssignments : s.greedyAssignments;
+export const selectActiveBaselineAssignments = (
+  s: ComparisonStore,
+): RouteAssignment[] | null =>
+  s.baselineSolver === "naive" ? s.naiveAssignments : s.greedyAssignments;

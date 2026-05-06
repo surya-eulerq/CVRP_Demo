@@ -7,7 +7,11 @@
 // CompareDashboard, SolverCard, and excelExport without creating
 // circular dependencies.
 
-import type { VehicleRoute, RouteAssignment, CVRPInstance } from "../types/cvrp";
+import type {
+  VehicleRoute,
+  RouteAssignment,
+  CVRPInstance,
+} from "../types/cvrp";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // resolveCapacity
@@ -17,13 +21,13 @@ import type { VehicleRoute, RouteAssignment, CVRPInstance } from "../types/cvrp"
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function resolveCapacity(
-    vehicleCapacity: number | number[],
-    vehicleId: number,
+  vehicleCapacity: number | number[],
+  vehicleId: number,
 ): number {
-    if (Array.isArray(vehicleCapacity)) {
-        return vehicleCapacity[vehicleId] ?? vehicleCapacity[0] ?? 0;
-    }
-    return vehicleCapacity;
+  if (Array.isArray(vehicleCapacity)) {
+    return vehicleCapacity[vehicleId] ?? vehicleCapacity[0] ?? 0;
+  }
+  return vehicleCapacity;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,30 +42,23 @@ export function resolveCapacity(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function buildRouteAssignments(
-    routes: VehicleRoute[],
-    instance: CVRPInstance,
+  routes: VehicleRoute[],
+  instance: CVRPInstance,
 ): RouteAssignment[] {
-    return routes.map((vr): RouteAssignment => {
-        const capacity = resolveCapacity(instance.vehicle_capacity, vr.vehicleId);
-        return {
-            vehicleId: vr.vehicleId,
-            route: vr.route,
-            totalDistance: vr.totalDistance,
-            totalLoad: vr.totalLoad,
-            numStops: vr.numStops,
-            capacity,
-            isOverCapacity: vr.totalLoad > capacity,
-        };
-    });
+  return routes.map((vr): RouteAssignment => {
+    const capacity = resolveCapacity(instance.vehicle_capacity, vr.vehicleId);
+    return {
+      vehicleId: vr.vehicleId,
+      route: vr.route,
+      totalDistance: vr.totalDistance,
+      totalLoad: vr.totalLoad,
+      numStops: vr.numStops,
+      capacity,
+      isOverCapacity: vr.totalLoad > capacity,
+    };
+  });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// computeFleetTotal
-//
-// Sums totalDistance across all vehicles — used by SolverCard footer
-// and the Excel Summary sheet.
-// ─────────────────────────────────────────────────────────────────────────────
-
 export function computeFleetTotal(routes: VehicleRoute[]): number {
-    return routes.reduce((sum, vr) => sum + vr.totalDistance, 0);
+  return routes.reduce((sum, vr) => sum + vr.totalDistance, 0);
 }

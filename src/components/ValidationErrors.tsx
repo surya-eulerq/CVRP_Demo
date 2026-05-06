@@ -1,9 +1,9 @@
-// src/components/ValidationErrors.tsx
-// Displays inline validation errors / warnings from Excel parsing
-// Spec ref: §6 (Validation Rules)
-
 import React from "react";
-import { IoAlertCircleOutline, IoWarningOutline, IoCloseOutline } from "react-icons/io5";
+import {
+  IoAlertCircleOutline,
+  IoWarningOutline,
+  IoCloseOutline,
+} from "react-icons/io5";
 import type { ValidationError } from "../types/cvrp";
 
 // ─────────────────────────────────────────────────────────────
@@ -11,9 +11,9 @@ import type { ValidationError } from "../types/cvrp";
 // ─────────────────────────────────────────────────────────────
 
 interface ValidationErrorsProps {
-    errors: ValidationError[];
-    onDismiss?: (index: number) => void;
-    className?: string;
+  errors: ValidationError[];
+  onDismiss?: (index: number) => void;
+  className?: string;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -21,7 +21,7 @@ interface ValidationErrorsProps {
 // ─────────────────────────────────────────────────────────────
 
 function isWarning(message: string): boolean {
-    return message.startsWith("Warning:");
+  return message.startsWith("Warning:");
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -29,94 +29,109 @@ function isWarning(message: string): boolean {
 // ─────────────────────────────────────────────────────────────
 
 const ValidationErrors: React.FC<ValidationErrorsProps> = ({
-    errors,
-    onDismiss,
-    className = "",
+  errors,
+  onDismiss,
+  className = "",
 }) => {
-    if (!errors || errors.length === 0) return null;
+  if (!errors || errors.length === 0) return null;
 
-    const hardErrors = errors.filter((e) => !isWarning(e.message));
-    const warnings = errors.filter((e) => isWarning(e.message));
+  const hardErrors = errors.filter((e) => !isWarning(e.message));
+  const warnings = errors.filter((e) => isWarning(e.message));
 
-    return (
-        <div className={`ve-root ${className}`}>
+  return (
+    <div className={`ve-root ${className}`}>
+      {/* ── Hard errors ──────────────────────────────── */}
+      {hardErrors.length > 0 && (
+        <div className="ve-section ve-section--error">
+          <div className="ve-section-header">
+            <IoAlertCircleOutline
+              size={14}
+              className="ve-section-icon ve-section-icon--error"
+            />
+            <span className="ve-section-title">
+              {hardErrors.length === 1
+                ? "1 error found"
+                : `${hardErrors.length} errors found`}
+            </span>
+          </div>
+          <ul className="ve-list">
+            {hardErrors.map((err, i) => {
+              const globalIndex = errors.indexOf(err);
+              return (
+                <li key={i} className="ve-item ve-item--error">
+                  <span
+                    className="ve-item-dot ve-item-dot--error"
+                    aria-hidden
+                  />
+                  <div className="ve-item-body">
+                    {err.field && err.field !== "file" && (
+                      <span className="ve-item-field">{err.field}</span>
+                    )}
+                    <span className="ve-item-msg">{err.message}</span>
+                  </div>
+                  {onDismiss && (
+                    <button
+                      className="ve-dismiss-btn"
+                      onClick={() => onDismiss(globalIndex)}
+                      aria-label={`Dismiss error: ${err.message}`}
+                    >
+                      <IoCloseOutline size={12} />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
-            {/* ── Hard errors ──────────────────────────────── */}
-            {hardErrors.length > 0 && (
-                <div className="ve-section ve-section--error">
-                    <div className="ve-section-header">
-                        <IoAlertCircleOutline size={14} className="ve-section-icon ve-section-icon--error" />
-                        <span className="ve-section-title">
-                            {hardErrors.length === 1 ? "1 error found" : `${hardErrors.length} errors found`}
-                        </span>
-                    </div>
-                    <ul className="ve-list">
-                        {hardErrors.map((err, i) => {
-                            const globalIndex = errors.indexOf(err);
-                            return (
-                                <li key={i} className="ve-item ve-item--error">
-                                    <span className="ve-item-dot ve-item-dot--error" aria-hidden />
-                                    <div className="ve-item-body">
-                                        {err.field && err.field !== "file" && (
-                                            <span className="ve-item-field">{err.field}</span>
-                                        )}
-                                        <span className="ve-item-msg">{err.message}</span>
-                                    </div>
-                                    {onDismiss && (
-                                        <button
-                                            className="ve-dismiss-btn"
-                                            onClick={() => onDismiss(globalIndex)}
-                                            aria-label={`Dismiss error: ${err.message}`}
-                                        >
-                                            <IoCloseOutline size={12} />
-                                        </button>
-                                    )}
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            )}
+      {/* ── Warnings ─────────────────────────────────── */}
+      {warnings.length > 0 && (
+        <div className="ve-section ve-section--warning">
+          <div className="ve-section-header">
+            <IoWarningOutline
+              size={14}
+              className="ve-section-icon ve-section-icon--warning"
+            />
+            <span className="ve-section-title">
+              {warnings.length === 1
+                ? "1 warning"
+                : `${warnings.length} warnings`}
+            </span>
+          </div>
+          <ul className="ve-list">
+            {warnings.map((warn, i) => {
+              const globalIndex = errors.indexOf(warn);
+              return (
+                <li key={i} className="ve-item ve-item--warning">
+                  <span
+                    className="ve-item-dot ve-item-dot--warning"
+                    aria-hidden
+                  />
+                  <div className="ve-item-body">
+                    {warn.field && warn.field !== "file" && (
+                      <span className="ve-item-field">{warn.field}</span>
+                    )}
+                    <span className="ve-item-msg">{warn.message}</span>
+                  </div>
+                  {onDismiss && (
+                    <button
+                      className="ve-dismiss-btn"
+                      onClick={() => onDismiss(globalIndex)}
+                      aria-label={`Dismiss warning: ${warn.message}`}
+                    >
+                      <IoCloseOutline size={12} />
+                    </button>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
-            {/* ── Warnings ─────────────────────────────────── */}
-            {warnings.length > 0 && (
-                <div className="ve-section ve-section--warning">
-                    <div className="ve-section-header">
-                        <IoWarningOutline size={14} className="ve-section-icon ve-section-icon--warning" />
-                        <span className="ve-section-title">
-                            {warnings.length === 1 ? "1 warning" : `${warnings.length} warnings`}
-                        </span>
-                    </div>
-                    <ul className="ve-list">
-                        {warnings.map((warn, i) => {
-                            const globalIndex = errors.indexOf(warn);
-                            return (
-                                <li key={i} className="ve-item ve-item--warning">
-                                    <span className="ve-item-dot ve-item-dot--warning" aria-hidden />
-                                    <div className="ve-item-body">
-                                        {warn.field && warn.field !== "file" && (
-                                            <span className="ve-item-field">{warn.field}</span>
-                                        )}
-                                        <span className="ve-item-msg">{warn.message}</span>
-                                    </div>
-                                    {onDismiss && (
-                                        <button
-                                            className="ve-dismiss-btn"
-                                            onClick={() => onDismiss(globalIndex)}
-                                            aria-label={`Dismiss warning: ${warn.message}`}
-                                        >
-                                            <IoCloseOutline size={12} />
-                                        </button>
-                                    )}
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            )}
-
-            {/* ── Styles ───────────────────────────────────── */}
-            <style>{`
+      {/* ── Styles ───────────────────────────────────── */}
+      <style>{`
         .ve-root {
           display: flex;
           flex-direction: column;
@@ -250,8 +265,8 @@ const ValidationErrors: React.FC<ValidationErrorsProps> = ({
           color: var(--text, #e2e8f0);
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 };
 
 export default ValidationErrors;

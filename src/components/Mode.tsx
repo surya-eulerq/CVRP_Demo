@@ -47,10 +47,6 @@ type Props = {
   isRunning: boolean;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Internal row types
-// ─────────────────────────────────────────────────────────────────────────────
-
 type VehicleRow = {
   id: number;
   capacity: string;
@@ -75,8 +71,6 @@ export default function Mode({
   hasGenerated,
   isRunning,
 }: Props) {
-
-  // ── Row state ─────────────────────────────────────────────────────────────
   const [vehicles, setVehicles] = useState<VehicleRow[]>([
     { id: 1, capacity: "", error: null, clamped: false },
   ]);
@@ -84,27 +78,21 @@ export default function Mode({
     { id: 1, load: "", error: null },
   ]);
 
-  // ── Vehicle-type dropdown ─────────────────────────────────────────────────
   const [vehicleType, setVehicleType] = useState<VehicleType>("two-wheeler");
   const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
 
-  // ── Upload modal ──────────────────────────────────────────────────────────
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
 
-  // ── Errors ────────────────────────────────────────────────────────────────
-  const [formError, setFormError] = useState<string | null>(null);   // inline sidebar error
-  const [toastError, setToastError] = useState<string | null>(null); // top-right toast error
+  const [formError, setFormError] = useState<string | null>(null);
+  const [toastError, setToastError] = useState<string | null>(null);
 
-  // ── Input mode ────────────────────────────────────────────────────────────
   const [inputMode, setInputMode] = useState<"generate" | "upload">("generate");
 
-  // ── Refs for last row inputs (for Enter-key focus) ────────────────────────
   const lastVehicleInputRef = useRef<HTMLInputElement | null>(null);
   const lastPickupInputRef = useRef<HTMLInputElement | null>(null);
 
-  // ── Toast auto-dismiss timer ref ─────────────────────────────────────────
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -135,38 +123,34 @@ export default function Mode({
     setTimeout(() => lastVehicleInputRef.current?.focus(), 30);
   }, []);
 
-  const updateVehicleCapacity = useCallback(
-    (id: number, value: string) => {
-      setVehicles((prev) =>
-        prev.map((v) =>
-          v.id !== id ? v : { ...v, capacity: value, error: null, clamped: false }
-        )
-      );
-    },
-    []
-  );
+  const updateVehicleCapacity = useCallback((id: number, value: string) => {
+    setVehicles((prev) =>
+      prev.map((v) =>
+        v.id !== id
+          ? v
+          : { ...v, capacity: value, error: null, clamped: false },
+      ),
+    );
+  }, []);
 
-  const clampVehicleCapacity = useCallback(
-    (id: number, type: VehicleType) => {
-      const maxCap = MAX_CAPACITY[type];
+  const clampVehicleCapacity = useCallback((id: number, type: VehicleType) => {
+    const maxCap = MAX_CAPACITY[type];
+    setVehicles((prev) =>
+      prev.map((v) => {
+        if (v.id !== id) return v;
+        const num = parseInt(v.capacity, 10);
+        if (!isNaN(num) && num > maxCap) {
+          return { ...v, capacity: String(maxCap), error: null, clamped: true };
+        }
+        return { ...v, error: null, clamped: false };
+      }),
+    );
+    setTimeout(() => {
       setVehicles((prev) =>
-        prev.map((v) => {
-          if (v.id !== id) return v;
-          const num = parseInt(v.capacity, 10);
-          if (!isNaN(num) && num > maxCap) {
-            return { ...v, capacity: String(maxCap), error: null, clamped: true };
-          }
-          return { ...v, error: null, clamped: false };
-        })
+        prev.map((v) => (v.id === id ? { ...v, clamped: false } : v)),
       );
-      setTimeout(() => {
-        setVehicles((prev) =>
-          prev.map((v) => (v.id === id ? { ...v, clamped: false } : v))
-        );
-      }, 900);
-    },
-    []
-  );
+    }, 900);
+  }, []);
 
   const removeVehicle = useCallback((id: number) => {
     setVehicles((prev) => {
@@ -200,7 +184,7 @@ export default function Mode({
           }
         }
         return { ...p, load: value, error };
-      })
+      }),
     );
   }, []);
 
@@ -211,10 +195,6 @@ export default function Mode({
       return filtered.map((p, i) => ({ ...p, id: i + 1 }));
     });
   }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Build & Validate
-  // ─────────────────────────────────────────────────────────────────────────
 
   function buildAndValidate(): GenerateParams | null {
     let valid = true;
@@ -248,7 +228,7 @@ export default function Mode({
     if (!valid) return null;
 
     const vehicleCapacities = validatedVehicles.map((v) =>
-      parseInt(v.capacity, 10)
+      parseInt(v.capacity, 10),
     );
     const pickupLoad = validatedPickups.map((p) => parseInt(p.load, 10));
     const vehicleCapacity: number[] = vehicleCapacities;
@@ -258,7 +238,7 @@ export default function Mode({
     const totalCap = vehicleCapacities.reduce((s, v) => s + v, 0);
     if (totalLoad > totalCap) {
       setFormError(
-        `Total pickup load (${totalLoad}) exceeds total fleet capacity (${totalCap}). Increase capacity or reduce load.`
+        `Total pickup load (${totalLoad}) exceeds total fleet capacity (${totalCap}). Increase capacity or reduce load.`,
       );
       return null;
     }
@@ -296,20 +276,14 @@ export default function Mode({
     onRunComparison();
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // File upload handler
-  // ─────────────────────────────────────────────────────────────────────────
-  // NOTE: The modal is already closed by the time this runs (ExcelUploadModal
-  // calls onClose() before invoking onUpload). All errors are shown as
-  // top-right toasts so they're never hidden behind the modal.
-
   async function handleFileUpload(file: File) {
     setIsParsing(true);
     setFormError(null);
     setToastError(null);
 
     try {
-      const { depot, locations, warnings, fatalError } = await parseLocationFile(file);
+      const { depot, locations, warnings, fatalError } =
+        await parseLocationFile(file);
 
       // ── Fatal parse error ────────────────────────────────────────────────
       if (fatalError) {
@@ -324,22 +298,19 @@ export default function Mode({
         showToast(
           warnings.length > 0
             ? `No valid locations found. ${warnings[0]}`
-            : "No valid locations found in the file."
+            : "No valid locations found in the file.",
         );
         setIsParsing(false);
         return;
       }
 
-      // ── Validation 1: Pickup count mismatch ───────────────────────────────
-      // File: row 1 = depot, rows 2+ = pickups → locations.length = pickup count
-      // Sidebar: pickups.length = number of pickup load rows entered
       const filePickupCount = locations.length;
       const sidebarPickupCount = pickups.length;
 
       if (filePickupCount !== sidebarPickupCount) {
         setUploadModalOpen(false);
         showToast(
-          `Pick-Up load must be equal to the number of locations in the file.`
+          `Pick-Up load must be equal to the number of locations in the file.`,
         );
         setIsParsing(false);
         return;
@@ -358,9 +329,7 @@ export default function Mode({
 
       if (validPickupLoads.length > 0 && totalPickupLoad > totalFleetCapacity) {
         setUploadModalOpen(false);
-        showToast(
-          `Pick-Up load must less than vehicle capacity.`
-        );
+        showToast(`Pick-Up load must less than vehicle capacity.`);
         setIsParsing(false);
         return;
       }
@@ -379,7 +348,7 @@ export default function Mode({
         locations,
         numVehicles,
         vehicleCapacity,
-        depot // ← row 1 of the file is used as depot
+        depot,
       );
 
       const result: ExcelParseResult = { nodes, instance };
@@ -390,7 +359,9 @@ export default function Mode({
     } catch (err) {
       console.error("[Mode] Upload parse error:", err);
       setUploadModalOpen(false);
-      showToast("Failed to parse the file. Please check the format and try again.");
+      showToast(
+        "Failed to parse the file. Please check the format and try again.",
+      );
     } finally {
       setIsParsing(false);
     }
@@ -489,11 +460,7 @@ export default function Mode({
       )}
 
       <aside className="mode-sidebar">
-
-        {/* ══════════════ SCROLLABLE AREA ══════════════ */}
         <div className="sidebar-scroll-area">
-
-          {/* ── Vehicle-Type card ──────────────────────────────── */}
           <div className="sidebar-card">
             <div className="sidebar-card-header">
               <div className="header-left">
@@ -535,11 +502,19 @@ export default function Mode({
                         prev.map((v) => {
                           if (!v.capacity.trim()) return { ...v, error: null };
                           const num = parseInt(v.capacity, 10);
-                          if (!isNaN(num) && num > MAX_CAPACITY["two-wheeler"]) {
-                            return { ...v, capacity: String(MAX_CAPACITY["two-wheeler"]), error: null, clamped: true };
+                          if (
+                            !isNaN(num) &&
+                            num > MAX_CAPACITY["two-wheeler"]
+                          ) {
+                            return {
+                              ...v,
+                              capacity: String(MAX_CAPACITY["two-wheeler"]),
+                              error: null,
+                              clamped: true,
+                            };
                           }
                           return { ...v, error: null };
-                        })
+                        }),
                       );
                     }}
                   >
@@ -556,11 +531,19 @@ export default function Mode({
                         prev.map((v) => {
                           if (!v.capacity.trim()) return { ...v, error: null };
                           const num = parseInt(v.capacity, 10);
-                          if (!isNaN(num) && num > MAX_CAPACITY["three-wheeler"]) {
-                            return { ...v, capacity: String(MAX_CAPACITY["three-wheeler"]), error: null, clamped: true };
+                          if (
+                            !isNaN(num) &&
+                            num > MAX_CAPACITY["three-wheeler"]
+                          ) {
+                            return {
+                              ...v,
+                              capacity: String(MAX_CAPACITY["three-wheeler"]),
+                              error: null,
+                              clamped: true,
+                            };
                           }
                           return { ...v, error: null };
-                        })
+                        }),
                       );
                     }}
                   >
@@ -608,10 +591,11 @@ export default function Mode({
               {vehicles.map((v, idx) => {
                 const isLast = idx === vehicles.length - 1;
                 const parsed = parseInt(v.capacity, 10);
-                const fillPct = (!isNaN(parsed) && parsed > 0)
-                  ? Math.min((parsed / maxCap) * 100, 100)
-                  : 0;
-                void fillPct; // reserved for future fill bar
+                const fillPct =
+                  !isNaN(parsed) && parsed > 0
+                    ? Math.min((parsed / maxCap) * 100, 100)
+                    : 0;
+                void fillPct;
 
                 return (
                   <div className="sidebar-dynamic-row" key={v.id}>
@@ -632,7 +616,9 @@ export default function Mode({
                         min={1}
                         max={maxCap}
                         disabled={isRunning}
-                        onChange={(e) => updateVehicleCapacity(v.id, e.target.value)}
+                        onChange={(e) =>
+                          updateVehicleCapacity(v.id, e.target.value)
+                        }
                         onBlur={() => clampVehicleCapacity(v.id, vehicleType)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter") {
@@ -661,9 +647,7 @@ export default function Mode({
               })}
             </div>
 
-            {capacityHint && (
-              <p className="capacity-hint">{capacityHint}</p>
-            )}
+            {capacityHint && <p className="capacity-hint">{capacityHint}</p>}
           </div>
 
           {/* ── Pickup card ─────────────────────────────────────── */}
@@ -742,18 +726,15 @@ export default function Mode({
             </p>
           </div>
 
-          {/* ── Form-level error (infeasibility / generate validation) ─────── */}
           {formError && (
             <div className="form-error-banner">
               <span className="form-error-icon">⚠</span>
               <span>{formError}</span>
             </div>
           )}
-
         </div>
 
         <div className="sidebar-actions">
-
           <div className="action-row-top">
             <button
               className="btn-action btn-generate"
@@ -768,7 +749,9 @@ export default function Mode({
               className={`btn-action btn-upload${uploadedFile ? " btn-upload--active" : ""}`}
               onClick={() => setUploadModalOpen(true)}
               disabled={isRunning || isParsing}
-              title={uploadedFile ? uploadedFile.name : "Upload an Excel or CSV file"}
+              title={
+                uploadedFile ? uploadedFile.name : "Upload an Excel or CSV file"
+              }
             >
               {uploadedFile ? (
                 <RiAttachment2 className="btn-icon" />
@@ -789,9 +772,7 @@ export default function Mode({
             <RiPlayCircleLine className="run-icon" />
             Run Comparison
           </button>
-
         </div>
-
       </aside>
 
       {/* Keyframe for toast animation */}
