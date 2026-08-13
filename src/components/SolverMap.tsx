@@ -8,6 +8,7 @@ import {
   Polyline,
   Popup,
   TileLayer,
+  LayersControl,
   useMap,
 } from "react-leaflet";
 
@@ -21,9 +22,6 @@ import { useEffect } from "react";
 
 import type { Node } from "../types/cvrp";
 
-/* ────────────────────────────────────────────────────────────
-   Fix Leaflet default icons
-──────────────────────────────────────────────────────────── */
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 
 L.Icon.Default.mergeOptions({
@@ -31,10 +29,6 @@ L.Icon.Default.mergeOptions({
   iconUrl: markerIcon,
   shadowUrl: markerShadow,
 });
-
-/* ────────────────────────────────────────────────────────────
-   Icons
-──────────────────────────────────────────────────────────── */
 
 const depotIcon = new L.Icon({
   iconUrl: "https://maps.gstatic.com/mapfiles/ms2/micons/red-dot.png",
@@ -50,19 +44,13 @@ const pickupIcon = new L.Icon({
   popupAnchor: [0, -22],
 });
 
-/* ────────────────────────────────────────────────────────────
-   Route palettes
-──────────────────────────────────────────────────────────── */
-
 const WARM = ["#f97316", "#f59e0b", "#ef4444", "#fb923c", "#fbbf24"];
 
 const COOL = ["#14b8a6", "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6"];
 
-/* ────────────────────────────────────────────────────────────
-   Default map center (Bengaluru depot)
-──────────────────────────────────────────────────────────── */
-
 const DEFAULT_CENTER: [number, number] = [12.9716, 77.5946];
+
+const { BaseLayer } = LayersControl;
 
 function FitBounds({ nodes }: { nodes: Node[] }) {
   const map = useMap();
@@ -79,9 +67,55 @@ function FitBounds({ nodes }: { nodes: Node[] }) {
   return null;
 }
 
+function FitControl({ nodes }: { nodes: Node[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const FitAction = L.Control.extend({
+      onAdd: () => {
+        const container = L.DomUtil.create(
+          "div",
+          "leaflet-bar solvermap-fit-control"
+        );
+        const button = L.DomUtil.create("a", "", container);
+        button.href = "#";
+        button.title = "Fit to data";
+        button.innerHTML = "⤢";
+        button.setAttribute("role", "button");
+        button.setAttribute("aria-label", "Fit map to data");
+
+        L.DomEvent.on(button, "click", (e) => {
+          L.DomEvent.stopPropagation(e);
+          L.DomEvent.preventDefault(e);
+          if (!nodes.length) {
+            map.setView(DEFAULT_CENTER, 11);
+            return;
+          }
+          const points = nodes.map((n) => [n.lat, n.lng]) as [
+            number,
+            number
+          ][];
+          map.fitBounds(points, { padding: [40, 40] });
+        });
+
+        return container;
+      },
+    });
+
+    const control = new FitAction({ position: "topleft" });
+    control.addTo(map);
+
+    return () => {
+      control.remove();
+    };
+  }, [map, nodes]);
+
+  return null;
+}
+
 interface SolverMapProps {
   nodes: Node[];
-  routes: string[][]; // V1.1: string IDs, not numeric indices
+  routes: string[][];
   palette?: "warm" | "cool";
   activeVehicleIdx?: number | null;
 }
@@ -94,10 +128,6 @@ function buildNodeMap(nodes: Node[]): Map<string, Node> {
   });
   return map;
 }
-
-/* ────────────────────────────────────────────────────────────
-   Component
-──────────────────────────────────────────────────────────── */
 
 export default function SolverMap({
   nodes,
@@ -115,16 +145,51 @@ export default function SolverMap({
       zoom={11}
       style={{ width: "100%", height: "100%" }}
     >
-      <TileLayer
-        attribution="© OpenStreetMap"
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <style>{`
+        .solvermap-fit-control a {
+          width: 30px;
+          height: 30px;
+          line-height: 30px;
+          text-align: center;
+          font-size: 16px;
+          background: #ffffff;
+          color: #0b1629;
+          display: block;
+        }
+        .solvermap-fit-control a:hover {
+          background: #0d9488;
+          color: #ffffff;
+        }
+        .leaflet-control-layers {
+          font-size: 13px;
+        }
+      `}</style>
+
+      <LayersControl position="topright">
+        <BaseLayer checked name="Street">
+          <TileLayer
+            attribution="© OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+        </BaseLayer>
+
+        <BaseLayer name="Satellite">
+          <TileLayer
+            attribution="Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics"
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+          />
+        </BaseLayer>
+
+        <BaseLayer name="Dark">
+          <TileLayer
+            attribution="© OpenStreetMap contributors © CARTO"
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          />
+        </BaseLayer>
+      </LayersControl>
 
       <FitBounds nodes={nodes} />
-
-      {/* ─────────────────────────────────────
-                Markers
-            ───────────────────────────────────── */}
+      <FitControl nodes={nodes} />
 
       {nodes.map((node, i) => {
         const isDepot = i === 0;
@@ -165,7 +230,7 @@ export default function SolverMap({
             const node = nodeMap.get(stopId);
             return node ? ([node.lat, node.lng] as [number, number]) : null;
           })
-          .filter(Boolean) as [number, number][];
+          .filter((p): p is [number, number] => p !== null);
 
         return (
           <Polyline

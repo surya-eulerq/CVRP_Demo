@@ -1,15 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { Toaster, toast } from "react-hot-toast";
+import { RiFlashlightLine } from "react-icons/ri";
 import Topbar from "../components/Topbar";
 import AboutModal from "../components/AboutModal";
 import SolverMap from "../components/SolverMap";
-import SolverCard from "../components/SolverCard";
 import Mode from "../components/Mode";
-import {
-  useComparisonStore,
-  selectActiveBaselineRoutes,
-  selectActiveBaselineAssignments,
-} from "../state/useComparisonStore";
+import { useComparisonStore } from "../state/useComparisonStore";
 import { generateInstance } from "../utils/generator";
 import { runEulerQSolver, EulerQApiError } from "../utils/api";
 import { solveNaive } from "../solvers/naive";
@@ -50,6 +46,8 @@ const T = {
   },
 };
 
+type MapSolver = "naive" | "greedy" | "eulerq";
+
 function buildEulerQRoutes(
   routeResults: RouteResult[],
   pickups: Pickup[],
@@ -89,6 +87,18 @@ function toRouteArrays(routes: VehicleRoute[] | null): string[][] {
   });
 }
 
+function sumDistance(routes: VehicleRoute[] | null): number {
+  return (routes ?? []).reduce((s, vr) => s + vr.totalDistance, 0);
+}
+
+function countUsedVehicles(routes: VehicleRoute[] | null): number {
+  return (routes ?? []).filter((vr) => vr.numStops > 0).length;
+}
+
+function countStops(routes: VehicleRoute[] | null): number {
+  return (routes ?? []).reduce((s, vr) => s + vr.numStops, 0);
+}
+
 export default function CompareDashboard() {
   const {
     baselineSolver,
@@ -98,28 +108,21 @@ export default function CompareDashboard() {
     naiveRoutes,
     greedyRoutes,
     eulerqRoutes,
-    eulerqAssignments,
-    setBaselineSolver,
     setNodes,
     setInstance,
     setResults,
     setSolveError,
     resetAll,
   } = useComparisonStore();
-  const activeBaselineRoutes = useComparisonStore(selectActiveBaselineRoutes);
-  const activeBaselineAssignments = useComparisonStore(
-    selectActiveBaselineAssignments,
-  );
   const [showAbout, setShowAbout] = useState(false);
   const [showSmallScreen, setShowSmallScreen] = useState(false);
+  const [sidebarVisible, setSidebarVisible] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
   const [hasGenerated, setHasGenerated] = useState(false);
   const [showSolvingOverlay, setShowSolvingOverlay] = useState(false);
   const [assignmentsVisible, setAssignmentsVisible] = useState(false);
-  const [activeBaselineVehicle, setActiveBaselineVehicle] = useState<
-    number | null
-  >(null);
-  const [activeEulerqVehicle, setActiveEulerqVehicle] = useState<number | null>(
+  const [activeMapSolver, setActiveMapSolver] = useState<MapSolver>("eulerq");
+  const [activeMapVehicle, setActiveMapVehicle] = useState<number | null>(
     null,
   );
 
@@ -133,8 +136,11 @@ export default function CompareDashboard() {
   useEffect(() => {
     if (!hasResults) {
       setAssignmentsVisible(false);
-      setActiveBaselineVehicle(null);
-      setActiveEulerqVehicle(null);
+      setActiveMapVehicle(null);
+      setActiveMapSolver("eulerq");
+      setSidebarVisible(true);
+    } else {
+      setSidebarVisible(false);
     }
   }, [hasResults]);
 
@@ -144,10 +150,6 @@ export default function CompareDashboard() {
 
   const handleGenerate = useCallback(
     (params: GenerateParams) => {
-      setAssignmentsVisible(false);
-      setActiveBaselineVehicle(null);
-      setActiveEulerqVehicle(null);
-
       const result = generateInstance(params);
       const blockingErrors = result.errors.filter(
         (e) => !e.message.startsWith("Warning"),
@@ -164,6 +166,11 @@ export default function CompareDashboard() {
         .filter((e) => e.message.startsWith("Warning"))
         .forEach((e) => toast(e.message, { style: T.warn, icon: "⚠️" }));
 
+      resetAll();
+      setAssignmentsVisible(false);
+      setActiveMapVehicle(null);
+      setActiveMapSolver("eulerq");
+
       setNodes(result.nodes);
       setInstance(result.instance);
       setHasGenerated(true);
@@ -176,7 +183,7 @@ export default function CompareDashboard() {
         { style: T.success },
       );
     },
-    [setNodes, setInstance],
+    [setNodes, setInstance, resetAll],
   );
 
   // ─────────────────────────────────────────────────────────────
@@ -185,9 +192,10 @@ export default function CompareDashboard() {
 
   const handleUploadParsed = useCallback(
     (result: ExcelParseResult) => {
+      resetAll();
       setAssignmentsVisible(false);
-      setActiveBaselineVehicle(null);
-      setActiveEulerqVehicle(null);
+      setActiveMapVehicle(null);
+      setActiveMapSolver("eulerq");
 
       setNodes(result.nodes);
       setInstance(result.instance);
@@ -200,7 +208,7 @@ export default function CompareDashboard() {
         style: T.success,
       });
     },
-    [setNodes, setInstance],
+    [setNodes, setInstance, resetAll],
   );
 
   // ─────────────────────────────────────────────────────────────
@@ -216,8 +224,7 @@ export default function CompareDashboard() {
     }
 
     setAssignmentsVisible(false);
-    setActiveBaselineVehicle(null);
-    setActiveEulerqVehicle(null);
+    setActiveMapVehicle(null);
     setIsRunning(true);
     setShowSolvingOverlay(true);
     setSolveError(null);
@@ -306,6 +313,9 @@ export default function CompareDashboard() {
         metrics: solvedMetrics,
       });
 
+      setActiveMapSolver("eulerq");
+      setActiveMapVehicle(null);
+
       toast.success("Comparison complete!", { style: T.success });
     } catch (err) {
       console.error("[RunComparison]", err);
@@ -343,40 +353,14 @@ export default function CompareDashboard() {
     }
   }, [baselineSolver, setSolveError, setResults]);
 
-  const handleBaselineToggle = useCallback(
-    (solver: "naive" | "greedy") => {
-      setBaselineSolver(solver);
-      setActiveBaselineVehicle(null);
+  // ─────────────────────────────────────────────────────────────
+  // View Routes on Map handler
+  // ─────────────────────────────────────────────────────────────
 
-      const state = useComparisonStore.getState();
-      if (!state.metrics || !state.naiveRoutes || !state.greedyRoutes) return;
-
-      const routes =
-        solver === "naive" ? state.naiveRoutes : state.greedyRoutes;
-      const baselineObjective = routes.reduce(
-        (s, vr) => s + vr.totalDistance,
-        0,
-      );
-      const baselineTime =
-        solver === "naive" ? state.metrics.naiveTime : state.metrics.greedyTime;
-
-      const improvementPercent =
-        baselineObjective > 0
-          ? ((baselineObjective - state.metrics.eulerQObjective) /
-              baselineObjective) *
-            100
-          : 0;
-
-      state.setMetrics({
-        ...state.metrics,
-        baselineSolverName: solver,
-        baselineObjective,
-        baselineTime,
-        improvementPercent,
-      });
-    },
-    [setBaselineSolver],
-  );
+  const handleViewRoutes = useCallback((solver: MapSolver) => {
+    setActiveMapSolver(solver);
+    setActiveMapVehicle(null);
+  }, []);
 
   // ─────────────────────────────────────────────────────────────
   // Reset handler
@@ -388,36 +372,52 @@ export default function CompareDashboard() {
     setIsRunning(false);
     setShowSolvingOverlay(false);
     setAssignmentsVisible(false);
-    setActiveBaselineVehicle(null);
-    setActiveEulerqVehicle(null);
+    setActiveMapVehicle(null);
+    setActiveMapSolver("eulerq");
   }, [resetAll]);
 
   const showResults = hasResults && assignmentsVisible && !showSolvingOverlay;
 
-  const baselineFleetDist = (activeBaselineRoutes ?? []).reduce(
-    (s, vr) => s + vr.totalDistance,
-    0,
-  );
-  const eulerqFleetDist = (eulerqRoutes ?? []).reduce(
-    (s, vr) => s + vr.totalDistance,
-    0,
-  );
+  const activeMapRoutes =
+    activeMapSolver === "naive"
+      ? naiveRoutes
+      : activeMapSolver === "greedy"
+        ? greedyRoutes
+        : eulerqRoutes;
 
-  const baselineToggle = (
-    <div className="sc-baseline-toggle">
-      <button
-        className={`sc-toggle-btn ${baselineSolver === "naive" ? "sc-toggle-active" : ""}`}
-        onClick={() => handleBaselineToggle("naive")}
-      >
-        Naive
-      </button>
-      <button
-        className={`sc-toggle-btn ${baselineSolver === "greedy" ? "sc-toggle-active" : ""}`}
-        onClick={() => handleBaselineToggle("greedy")}
-      >
-        Greedy
-      </button>
-    </div>
+  const activeMapPalette = activeMapSolver === "eulerq" ? "cool" : "warm";
+
+  const totalPickups = Math.max(nodes.length - 1, 0);
+
+  const solverSummaries = [
+    {
+      key: "naive" as MapSolver,
+      label: "Naive Solver",
+      dotClass: "result-dot--orange",
+      routes: naiveRoutes,
+      distance: sumDistance(naiveRoutes),
+      solveTimeMs: metrics?.naiveTime ?? 0,
+    },
+    {
+      key: "greedy" as MapSolver,
+      label: "Greedy Solver",
+      dotClass: "result-dot--blue",
+      routes: greedyRoutes,
+      distance: sumDistance(greedyRoutes),
+      solveTimeMs: metrics?.greedyTime ?? 0,
+    },
+    {
+      key: "eulerq" as MapSolver,
+      label: "EulerQ Solver",
+      dotClass: "result-dot--teal",
+      routes: eulerqRoutes,
+      distance: sumDistance(eulerqRoutes),
+      solveTimeMs: metrics?.eulerQTime ?? 0,
+    },
+  ];
+
+  const bestSolver = solverSummaries.reduce((best, s) =>
+    s.distance < best.distance ? s : best,
   );
 
   return (
@@ -507,158 +507,165 @@ export default function CompareDashboard() {
           hasResults={hasResults}
         />
         {/* Input Panel */}
-        <Mode
-          onGenerate={handleGenerate}
-          onRunComparison={handleRunComparison}
-          onUploadParsed={handleUploadParsed}
-          hasGenerated={hasGenerated}
-          isRunning={isRunning}
-        />
+        {sidebarVisible ? (
+          <Mode
+            onGenerate={handleGenerate}
+            onRunComparison={handleRunComparison}
+            onUploadParsed={handleUploadParsed}
+            hasGenerated={hasGenerated}
+            isRunning={isRunning}
+          />
+        ) : (
+          <button
+            type="button"
+            className="btn-show-sidebar"
+            onClick={() => setSidebarVisible(true)}
+          >
+            <RiFlashlightLine className="btn-icon" />
+            <span>Generate New Instance</span>
+          </button>
+        )}
 
-        <div className="solver-section">
-          <div className="solver-grid">
-            <SolverCard
-              title="Classic Solver"
-              accent="orange"
-              rightAction={baselineToggle}
-              isSolving={showSolvingOverlay}
-              showResults={showResults}
-              objective={metrics?.baselineObjective}
-              solveTimeMs={metrics?.baselineTime}
-              map={
-                <SolverMap
-                  nodes={nodes}
-                  routes={toRouteArrays(activeBaselineRoutes)}
-                  palette="warm"
-                  activeVehicleIdx={activeBaselineVehicle}
-                />
-              }
-              routes={activeBaselineRoutes ?? []}
+        <div
+          className={`dashboard-content ${
+            sidebarVisible ? "" : "dashboard-content--full"
+          }`}
+        >
+          <div
+            className={`map-section ${
+              showResults ? "map-section--results" : "map-section--initial"
+            }`}
+          >
+            <SolverMap
               nodes={nodes}
-              activeVehicleIdx={activeBaselineVehicle}
-              onVehicleClick={setActiveBaselineVehicle}
-              fleetDistance={baselineFleetDist}
-            />
-
-            <SolverCard
-              title="EulerQ Solver"
-              accent="teal"
-              isSolving={showSolvingOverlay}
-              showResults={showResults}
-              objective={metrics?.eulerQObjective}
-              solveTimeMs={metrics?.eulerQTime}
-              map={
-                <SolverMap
-                  nodes={nodes}
-                  routes={toRouteArrays(eulerqRoutes)}
-                  palette="cool"
-                  activeVehicleIdx={activeEulerqVehicle}
-                />
-              }
-              routes={eulerqRoutes ?? []}
-              nodes={nodes}
-              activeVehicleIdx={activeEulerqVehicle}
-              onVehicleClick={setActiveEulerqVehicle}
-              fleetDistance={eulerqFleetDist}
+              routes={toRouteArrays(activeMapRoutes)}
+              palette={activeMapPalette}
+              activeVehicleIdx={activeMapVehicle}
             />
           </div>
 
-          {showResults &&
-            metrics &&
-            (() => {
-              const baselineWins =
-                metrics.baselineObjective <= metrics.eulerQObjective;
-              const eulerqWins =
-                metrics.eulerQObjective < metrics.baselineObjective;
-              return (
-                <div className="result-row">
-                  {/* ── Classic Solver result card ── */}
-                  <div
-                    className={`result-card ${baselineWins ? "result-card--best" : ""}`}
-                  >
-                    <div className="result-card-header">
-                      <span className="result-dot result-dot--orange" />
-                      <span className="result-card-title">
-                        Classic Solver
-                        <span
-                          style={{
-                            opacity: 0.55,
-                            fontWeight: 500,
-                            marginLeft: 6,
-                          }}
-                        >
-                          ({metrics.baselineSolverName})
-                        </span>
-                      </span>
-                      {baselineWins && (
-                        <span className="result-best-badge">BEST</span>
-                      )}
-                    </div>
-                    <div className="result-card-stats">
-                      <div className="result-stat-cell">
-                        <span className="result-stat-label">
-                          Total Distance
-                        </span>
-                        <span
-                          className={`result-stat-value ${baselineWins ? "result-stat-value--best" : ""}`}
-                        >
-                          {metrics.baselineObjective.toLocaleString(undefined, {
-                            maximumFractionDigits: 0,
-                          })}
-                          <span className="result-stat-unit"> KM</span>
-                        </span>
-                      </div>
-                      <div className="result-stat-cell">
-                        <span className="result-stat-label">Solve Time</span>
-                        <span
-                          className={`result-stat-value ${baselineWins ? "result-stat-value--best" : ""}`}
-                        >
-                          {metrics.baselineTime.toFixed(3)}
-                          <span className="result-stat-unit"> ms</span>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ── EulerQ Solver result card ── */}
-                  <div
-                    className={`result-card ${eulerqWins ? "result-card--best" : ""}`}
-                  >
-                    <div className="result-card-header">
-                      <span className="result-dot result-dot--teal" />
-                      <span className="result-card-title">EulerQ Solver</span>
-                      {eulerqWins && (
-                        <span className="result-best-badge">BEST</span>
-                      )}
-                    </div>
-                    <div className="result-card-stats">
-                      <div className="result-stat-cell">
-                        <span className="result-stat-label">
-                          Total Distance
-                        </span>
-                        <span
-                          className={`result-stat-value ${eulerqWins ? "result-stat-value--best" : ""}`}
-                        >
-                          {metrics.eulerQObjective.toLocaleString(undefined, {
-                            maximumFractionDigits: 0,
-                          })}
-                          <span className="result-stat-unit">KM</span>
-                        </span>
-                      </div>
-                      <div className="result-stat-cell">
-                        <span className="result-stat-label">Solve Time</span>
-                        <span
-                          className={`result-stat-value ${eulerqWins ? "result-stat-value--best" : ""}`}
-                        >
-                          {metrics.eulerQTime.toFixed(3)}
-                          <span className="result-stat-unit"> ms</span>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+          {showResults && metrics && (
+            <div className="results-section">
+              <div className="summary-banner">
+                <div className="summary-card">
+                  <span className="summary-label">Best Solver</span>
+                  <span className="summary-val">{bestSolver.label}</span>
                 </div>
-              );
-            })()}
+                <div className="summary-card">
+                  <span className="summary-label">Best Distance</span>
+                  <span className="summary-val">
+                    {bestSolver.distance.toLocaleString(undefined, {
+                      maximumFractionDigits: 0,
+                    })}{" "}
+                    km
+                  </span>
+                </div>
+                <div className="summary-card">
+                  <span className="summary-label">
+                    EulerQ vs {metrics.baselineSolverName}
+                  </span>
+                  <span
+                    className="summary-val"
+                    style={{
+                      color:
+                        metrics.improvementPercent >= 0
+                          ? "#22c55e"
+                          : "#ef4444",
+                    }}
+                  >
+                    {metrics.improvementPercent >= 0 ? "-" : "+"}
+                    {Math.abs(metrics.improvementPercent).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
+              <div className="result-row">
+                {solverSummaries.map((s) => {
+                  const ridersUsed = countUsedVehicles(s.routes);
+                  const stops = countStops(s.routes);
+                  const feasible =
+                    totalPickups === 0 || stops === totalPickups;
+                  const isBest = s.distance <= bestSolver.distance + 1e-6;
+                  const isActive = activeMapSolver === s.key;
+
+                  return (
+                    <div
+                      key={s.key}
+                      className={`result-card ${
+                        isBest ? "result-card--best" : ""
+                      }`}
+                    >
+                      <div className="result-card-header">
+                        <span className={`result-dot ${s.dotClass}`} />
+                        <span className="result-card-title">{s.label}</span>
+                        {isBest && (
+                          <span className="result-best-badge">BEST</span>
+                        )}
+                      </div>
+
+                      <div className="result-card-stats result-card-stats--quad">
+                        <div className="result-stat-cell">
+                          <span className="result-stat-label">
+                            Total Distance
+                          </span>
+                          <span
+                            className={`result-stat-value ${
+                              isBest ? "result-stat-value--best" : ""
+                            }`}
+                          >
+                            {s.distance.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}
+                            <span className="result-stat-unit"> KM</span>
+                          </span>
+                        </div>
+                        <div className="result-stat-cell">
+                          <span className="result-stat-label">
+                            Solve Time
+                          </span>
+                          <span className="result-stat-value">
+                            {s.solveTimeMs.toFixed(3)}
+                            <span className="result-stat-unit"> ms</span>
+                          </span>
+                        </div>
+                        <div className="result-stat-cell">
+                          <span className="result-stat-label">
+                            Riders Used
+                          </span>
+                          <span className="result-stat-value">
+                            {ridersUsed}
+                          </span>
+                        </div>
+                        <div className="result-stat-cell">
+                          <span className="result-stat-label">Feasible</span>
+                          <span
+                            className="result-stat-value"
+                            style={{
+                              fontSize: 16,
+                              color: feasible ? "#22c55e" : "#ef4444",
+                            }}
+                          >
+                            {feasible ? "Yes" : "No"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="result-card-actions">
+                        <button
+                          className={`btn-view-routes ${
+                            isActive ? "btn-view-routes--active" : ""
+                          }`}
+                          onClick={() => handleViewRoutes(s.key)}
+                        >
+                          {isActive ? "Viewing on Map" : "View Routes on Map"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

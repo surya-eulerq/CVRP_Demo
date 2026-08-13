@@ -1,43 +1,28 @@
-import { useState, useCallback, useRef } from "react";
+// src/components/Mode.tsx
+
+import { useState } from "react";
 import "../Styling/Mode.css";
+
 import {
-  RiTruckLine,
-  RiAddLine,
-  RiSubtractLine,
   RiFlashlightLine,
-  RiAttachment2,
   RiPlayCircleLine,
-  RiArrowDownSLine,
   RiUploadCloud2Line,
+  RiRefreshLine,
+  RiRouteLine,
+  RiTeamLine,
+  RiMapPin2Line,
+  RiArrowDownSLine,
+  RiInformationLine,
 } from "react-icons/ri";
-import {
-  TbPackageImport,
-  TbCar,
-  TbBike,
-  TbTruckDelivery,
-} from "react-icons/tb";
-import { IoAlertCircleOutline, IoCloseOutline } from "react-icons/io5";
+
 import ExcelUploadModal from "./ExcelUploadModal";
+
 import {
   parseLocationFile,
   buildInstanceFromLocations,
 } from "../utils/excelParser";
+
 import type { GenerateParams, ExcelParseResult } from "../types/cvrp";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Constants
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MAX_CAPACITY: Record<VehicleType, number> = {
-  "two-wheeler": 5,
-  "three-wheeler": 20,
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Public types
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type VehicleType = "two-wheeler" | "three-wheeler";
 
 type Props = {
   onGenerate: (params: GenerateParams) => void;
@@ -47,22 +32,148 @@ type Props = {
   isRunning: boolean;
 };
 
-type VehicleRow = {
-  id: number;
-  capacity: string;
-  error: string | null;
-  clamped: boolean;
+type OptimizationMode = "distance" | "riders";
+
+/*
+ * The depot is fixed to central Bengaluru, matching the default
+ * map center in SolverMap.tsx. Depot selection is shown here for
+ * context but is not yet wired to GenerateParams — there is only
+ * one depot supported today.
+ */
+const DEPOT_LABEL = "Bangalore (Center)";
+const DEPOT_LAT = 12.9716;
+const DEPOT_LNG = 77.5946;
+
+const ORDERS_MIN = 50;
+const ORDERS_MAX = 1000;
+const RIDERS_MIN = 5;
+const RIDERS_MAX = 50;
+const TIME_MIN = 1;
+const TIME_MAX = 12;
+
+const CAPACITY_FLOOR = 1;
+const CAPACITY_CEIL = 100;
+const LOAD_FLOOR = 1;
+const LOAD_CEIL = 50;
+
+type FieldErrors = {
+  orders?: string;
+  riders?: string;
+  availableTime?: string;
+  capacity?: string;
+  load?: string;
 };
 
-type PickupRow = {
-  id: number;
-  load: string;
-  error: string | null;
+function randomInRange(min: number, max: number): number {
+  if (max <= min) return min;
+  return Math.round((min + Math.random() * (max - min)) * 10) / 10;
+}
+
+function buildRangeValues(count: number, min: number, max: number): number[] {
+  return Array.from({ length: Math.max(count, 0) }, () =>
+    randomInRange(min, max),
+  );
+}
+
+/*
+ * ------------------------------------------------------------
+ * Dual-thumb range slider
+ * ------------------------------------------------------------
+ */
+
+type RangeSliderProps = {
+  min: number;
+  max: number;
+  valueMin: number;
+  valueMax: number;
+  step?: number;
+  onChange: (min: number, max: number) => void;
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Component
-// ─────────────────────────────────────────────────────────────────────────────
+function RangeSlider({
+  min,
+  max,
+  valueMin,
+  valueMax,
+  step = 1,
+  onChange,
+}: RangeSliderProps) {
+  const span = max - min || 1;
+  const pctMin = ((valueMin - min) / span) * 100;
+  const pctMax = ((valueMax - min) / span) * 100;
+
+  return (
+    <div className="range-slider">
+      <div className="range-slider-track">
+        <div
+          className="range-slider-fill"
+          style={{
+            left: `${pctMin}%`,
+            width: `${Math.max(pctMax - pctMin, 0)}%`,
+          }}
+        />
+      </div>
+      <input
+        type="range"
+        className="range-slider-input range-slider-input--min"
+        min={min}
+        max={max}
+        step={step}
+        value={valueMin}
+        onChange={(e) => {
+          const next = Math.min(Number(e.target.value), valueMax - step);
+          onChange(next, valueMax);
+        }}
+      />
+      <input
+        type="range"
+        className="range-slider-input range-slider-input--max"
+        min={min}
+        max={max}
+        step={step}
+        value={valueMax}
+        onChange={(e) => {
+          const next = Math.max(Number(e.target.value), valueMin + step);
+          onChange(valueMin, next);
+        }}
+      />
+    </div>
+  );
+}
+
+/*
+ * ------------------------------------------------------------
+ * Collapsible section wrapper
+ * ------------------------------------------------------------
+ */
+
+function CollapsibleSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mode-collapsible">
+      <button
+        type="button"
+        className="mode-collapsible-header"
+        onClick={onToggle}
+      >
+        <span>{title}</span>
+        <RiArrowDownSLine
+          className={`mode-collapsible-chevron ${open ? "is-open" : ""}`}
+        />
+      </button>
+      {open && <div className="mode-collapsible-body">{children}</div>}
+    </div>
+  );
+}
 
 export default function Mode({
   onGenerate,
@@ -71,717 +182,544 @@ export default function Mode({
   hasGenerated,
   isRunning,
 }: Props) {
-  const [vehicles, setVehicles] = useState<VehicleRow[]>([
-    { id: 1, capacity: "", error: null, clamped: false },
-  ]);
-  const [pickups, setPickups] = useState<PickupRow[]>([
-    { id: 1, load: "", error: null },
-  ]);
-
-  const [vehicleType, setVehicleType] = useState<VehicleType>("two-wheeler");
-  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
-
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isParsing, setIsParsing] = useState(false);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
-  const [formError, setFormError] = useState<string | null>(null);
-  const [toastError, setToastError] = useState<string | null>(null);
+  const [optimizationMode, setOptimizationMode] =
+    useState<OptimizationMode>("distance");
 
-  const [inputMode, setInputMode] = useState<"generate" | "upload">("generate");
+  const [numOrders, setNumOrders] = useState(350);
+  const [numRiders, setNumRiders] = useState(25);
+  const [availableTimeHours, setAvailableTimeHours] = useState(4);
+  const [trafficConsideration, setTrafficConsideration] = useState(true);
+  const [capacityMin, setCapacityMin] = useState(15);
+  const [capacityMax, setCapacityMax] = useState(30);
+  const [loadMin, setLoadMin] = useState(1);
+  const [loadMax, setLoadMax] = useState(10);
+  const [distanceType, setDistanceType] = useState<"osrm" | "haversine">(
+    "osrm",
+  );
 
-  const lastVehicleInputRef = useRef<HTMLInputElement | null>(null);
-  const lastPickupInputRef = useRef<HTMLInputElement | null>(null);
+  const [riderSettingsOpen, setRiderSettingsOpen] = useState(true);
+  const [orderSettingsOpen, setOrderSettingsOpen] = useState(true);
+  const [advancedOpen, setAdvancedOpen] = useState(true);
 
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [errors, setErrors] = useState<FieldErrors>({});
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Toast helpers
-  // ─────────────────────────────────────────────────────────────────────────
+  const isRidersMode = optimizationMode === "riders";
 
-  function showToast(message: string) {
-    // Clear any existing timer so the new toast gets a fresh 8 s window
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastError(message);
-    toastTimerRef.current = setTimeout(() => setToastError(null), 8000);
-  }
+  const averageCapacity = (capacityMin + capacityMax) / 2;
+  const averageLoad = (loadMin + loadMax) / 2;
 
-  function dismissToast() {
-    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-    setToastError(null);
-  }
+  /*
+   * ------------------------------------------------------------
+   * Validation
+   * ------------------------------------------------------------
+   */
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Vehicle row actions
-  // ─────────────────────────────────────────────────────────────────────────
+  function validate(): FieldErrors {
+    const next: FieldErrors = {};
 
-  const addVehicle = useCallback(() => {
-    setVehicles((prev) => [
-      ...prev,
-      { id: prev.length + 1, capacity: "", error: null, clamped: false },
-    ]);
-    setTimeout(() => lastVehicleInputRef.current?.focus(), 30);
-  }, []);
-
-  const updateVehicleCapacity = useCallback((id: number, value: string) => {
-    setVehicles((prev) =>
-      prev.map((v) =>
-        v.id !== id
-          ? v
-          : { ...v, capacity: value, error: null, clamped: false },
-      ),
-    );
-  }, []);
-
-  const clampVehicleCapacity = useCallback((id: number, type: VehicleType) => {
-    const maxCap = MAX_CAPACITY[type];
-    setVehicles((prev) =>
-      prev.map((v) => {
-        if (v.id !== id) return v;
-        const num = parseInt(v.capacity, 10);
-        if (!isNaN(num) && num > maxCap) {
-          return { ...v, capacity: String(maxCap), error: null, clamped: true };
-        }
-        return { ...v, error: null, clamped: false };
-      }),
-    );
-    setTimeout(() => {
-      setVehicles((prev) =>
-        prev.map((v) => (v.id === id ? { ...v, clamped: false } : v)),
-      );
-    }, 900);
-  }, []);
-
-  const removeVehicle = useCallback((id: number) => {
-    setVehicles((prev) => {
-      if (prev.length === 1) return prev;
-      const filtered = prev.filter((v) => v.id !== id);
-      return filtered.map((v, i) => ({ ...v, id: i + 1 }));
-    });
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Pickup row actions
-  // ─────────────────────────────────────────────────────────────────────────
-
-  const addPickup = useCallback(() => {
-    setPickups((prev) => [
-      ...prev,
-      { id: prev.length + 1, load: "", error: null },
-    ]);
-    setTimeout(() => lastPickupInputRef.current?.focus(), 30);
-  }, []);
-
-  const updatePickupLoad = useCallback((id: number, value: string) => {
-    setPickups((prev) =>
-      prev.map((p) => {
-        if (p.id !== id) return p;
-        let error: string | null = null;
-        if (value.trim() !== "") {
-          const num = Number(value);
-          if (isNaN(num) || num < 0 || !Number.isInteger(num)) {
-            error = "Must be a non-negative integer.";
-          }
-        }
-        return { ...p, load: value, error };
-      }),
-    );
-  }, []);
-
-  const removePickup = useCallback((id: number) => {
-    setPickups((prev) => {
-      if (prev.length === 1) return prev;
-      const filtered = prev.filter((p) => p.id !== id);
-      return filtered.map((p, i) => ({ ...p, id: i + 1 }));
-    });
-  }, []);
-
-  function buildAndValidate(): GenerateParams | null {
-    let valid = true;
-    setFormError(null);
-
-    const maxCap = MAX_CAPACITY[vehicleType];
-
-    // ── Validate vehicle capacities ────────────────────────────────────────
-    const validatedVehicles = vehicles.map((v) => {
-      let val = parseInt(v.capacity, 10);
-      if (!v.capacity.trim() || isNaN(val) || val <= 0) {
-        valid = false;
-        return { ...v, error: "Must be a positive integer." };
-      }
-      if (val > maxCap) val = maxCap;
-      return { ...v, capacity: String(val), error: null };
-    });
-    setVehicles(validatedVehicles);
-
-    // ── Validate pickup loads ──────────────────────────────────────────────
-    const validatedPickups = pickups.map((p) => {
-      const val = parseInt(p.load, 10);
-      if (!p.load.trim() || isNaN(val) || val < 0) {
-        valid = false;
-        return { ...p, error: "Must be a non-negative integer." };
-      }
-      return { ...p, error: null };
-    });
-    setPickups(validatedPickups);
-
-    if (!valid) return null;
-
-    const vehicleCapacities = validatedVehicles.map((v) =>
-      parseInt(v.capacity, 10),
-    );
-    const pickupLoad = validatedPickups.map((p) => parseInt(p.load, 10));
-    const vehicleCapacity: number[] = vehicleCapacities;
-
-    // ── Infeasibility check ────────────────────────────────────────────────
-    const totalLoad = pickupLoad.reduce((s, v) => s + v, 0);
-    const totalCap = vehicleCapacities.reduce((s, v) => s + v, 0);
-    if (totalLoad > totalCap) {
-      setFormError(
-        `Total pickup load (${totalLoad}) exceeds total fleet capacity (${totalCap}). Increase capacity or reduce load.`,
-      );
-      return null;
+    if (numOrders < ORDERS_MIN || numOrders > ORDERS_MAX) {
+      next.orders = `Enter a value between ${ORDERS_MIN} and ${ORDERS_MAX}.`;
     }
 
-    return {
-      numVehicles: vehicles.length,
-      numPickups: pickups.length,
-      vehicleCapacity,
-      pickupLoad,
-    };
+    if (isRidersMode) {
+      if (availableTimeHours < TIME_MIN || availableTimeHours > TIME_MAX) {
+        next.availableTime = `Enter a value between ${TIME_MIN} and ${TIME_MAX}.`;
+      }
+    } else {
+      if (numRiders < RIDERS_MIN || numRiders > RIDERS_MAX) {
+        next.riders = `Enter a value between ${RIDERS_MIN} and ${RIDERS_MAX}.`;
+      }
+    }
+
+    if (!isRidersMode && (capacityMin <= 0 || capacityMax < capacityMin)) {
+      next.capacity = "Capacity range is invalid.";
+    }
+    if (loadMin <= 0 || loadMax < loadMin) {
+      next.load = "Weight range is invalid.";
+    }
+
+    return next;
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Generate handler
-  // ─────────────────────────────────────────────────────────────────────────
+  /*
+   * ------------------------------------------------------------
+   * Generate
+   * ------------------------------------------------------------
+   */
 
   function handleGenerate() {
-    const params = buildAndValidate();
-    if (!params) return;
-    setInputMode("generate");
+    if (isRunning) return;
+
+    const fieldErrors = validate();
+    setErrors(fieldErrors);
+    if (Object.keys(fieldErrors).length > 0) return;
+
+    const effectiveNumRiders = isRidersMode ? RIDERS_MAX : numRiders;
+
+    const params: GenerateParams = {
+      numVehicles: effectiveNumRiders,
+      numPickups: numOrders,
+      vehicleCapacity: buildRangeValues(
+        effectiveNumRiders,
+        capacityMin,
+        capacityMax,
+      ),
+      pickupLoad: buildRangeValues(numOrders, loadMin, loadMax),
+    };
+
     onGenerate(params);
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Run Comparison handler
-  // ─────────────────────────────────────────────────────────────────────────
-
-  function handleRunComparison() {
-    if (inputMode === "upload") {
-      onRunComparison();
-      return;
-    }
-    const params = buildAndValidate();
-    if (!params) return;
-    onRunComparison();
-  }
+  /*
+   * ------------------------------------------------------------
+   * Upload
+   * ------------------------------------------------------------
+   */
 
   async function handleFileUpload(file: File) {
+    if (isParsing || isRunning) return;
+
     setIsParsing(true);
-    setFormError(null);
-    setToastError(null);
 
     try {
       const { depot, locations, warnings, fatalError } =
         await parseLocationFile(file);
 
-      // ── Fatal parse error ────────────────────────────────────────────────
+      /*
+       * Fatal parser error
+       */
       if (fatalError) {
+        console.error("[Mode] Upload error:", fatalError);
         setUploadModalOpen(false);
-        showToast(fatalError);
-        setIsParsing(false);
         return;
       }
 
+      /*
+       * No valid locations
+       */
       if (!depot || locations.length === 0) {
+        console.error("[Mode] No valid locations found.", warnings);
         setUploadModalOpen(false);
-        showToast(
-          warnings.length > 0
-            ? `No valid locations found. ${warnings[0]}`
-            : "No valid locations found in the file.",
-        );
-        setIsParsing(false);
         return;
       }
-
-      const filePickupCount = locations.length;
-      const sidebarPickupCount = pickups.length;
-
-      if (filePickupCount !== sidebarPickupCount) {
-        setUploadModalOpen(false);
-        showToast(
-          `Pick-Up load must be equal to the number of locations in the file.`,
-        );
-        setIsParsing(false);
-        return;
-      }
-
-      // ── Validation 2: Capacity < total pickup load ─────────────────────────
-      const validPickupLoads = pickups
-        .map((p) => parseInt(p.load, 10))
-        .filter((n) => !isNaN(n));
-      const totalPickupLoad = validPickupLoads.reduce((s, v) => s + v, 0);
-
-      const firstCap = parseInt(vehicles[0]?.capacity ?? "", 10);
-      const effectiveCapPerVehicle =
-        !isNaN(firstCap) && firstCap > 0 ? firstCap : MAX_CAPACITY[vehicleType];
-      const totalFleetCapacity = vehicles.length * effectiveCapPerVehicle;
-
-      if (validPickupLoads.length > 0 && totalPickupLoad > totalFleetCapacity) {
-        setUploadModalOpen(false);
-        showToast(`Pick-Up load must less than vehicle capacity.`);
-        setIsParsing(false);
-        return;
-      }
-
-      // Warn about skipped rows (non-fatal)
-      if (warnings.length > 0) {
-        console.warn("[Mode] Upload warnings:", warnings);
-      }
-
-      // ── Build instance ───────────────────────────────────────────────────
-      const numVehicles = vehicles.length;
-      const vehicleCapacity =
-        !isNaN(firstCap) && firstCap > 0 ? firstCap : MAX_CAPACITY[vehicleType];
 
       const { nodes, instance } = buildInstanceFromLocations(
         locations,
-        numVehicles,
-        vehicleCapacity,
+        numRiders,
+        averageCapacity,
         depot,
       );
 
-      const result: ExcelParseResult = { nodes, instance };
+      const result: ExcelParseResult = {
+        nodes,
+        instance,
+      };
+
+      /*
+       * Pass the parsed instance to CompareDashboard.
+       */
       onUploadParsed(result);
+
       setUploadedFile(file);
-      setInputMode("upload");
       setUploadModalOpen(false);
-    } catch (err) {
-      console.error("[Mode] Upload parse error:", err);
+
+      if (warnings.length > 0) {
+        console.warn("[Mode] Upload warnings:", warnings);
+      }
+    } catch (error) {
+      console.error("[Mode] Failed to parse uploaded file:", error);
       setUploadModalOpen(false);
-      showToast(
-        "Failed to parse the file. Please check the format and try again.",
-      );
     } finally {
       setIsParsing(false);
     }
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // canRun
-  // ─────────────────────────────────────────────────────────────────────────
+  /*
+   * ------------------------------------------------------------
+   * Run Comparison
+   * ------------------------------------------------------------
+   */
 
-  const canRun =
-    !isRunning &&
-    ((inputMode === "generate" && hasGenerated) ||
-      (inputMode === "upload" && uploadedFile !== null));
+  function handleRunComparison() {
+    if (isRunning || !hasGenerated) return;
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // Capacity hint
-  // ─────────────────────────────────────────────────────────────────────────
+    onRunComparison();
+  }
 
-  const capacityHint = (() => {
-    if (vehicles.length < 2) return null;
-    if (!vehicles.every((v) => v.capacity.trim() !== "")) return null;
-    const caps = vehicles.map((v) => parseInt(v.capacity, 10));
-    if (caps.some(isNaN)) return null;
-    const allSame = caps.every((c) => c === caps[0]);
-    return allSame
-      ? `Uniform capacity: ${caps[0]} per vehicle`
-      : `Per-vehicle: [${caps.join(", ")}]`;
-  })();
-
-  const maxCap = MAX_CAPACITY[vehicleType];
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────────────────────────────────────
+  /*
+   * ------------------------------------------------------------
+   * Render
+   * ------------------------------------------------------------
+   */
 
   return (
     <>
       <ExcelUploadModal
         isOpen={uploadModalOpen}
-        onClose={() => !isParsing && setUploadModalOpen(false)}
+        onClose={() => {
+          if (!isParsing && !isRunning) {
+            setUploadModalOpen(false);
+          }
+        }}
         onUpload={handleFileUpload}
         isParsing={isParsing}
       />
 
-      {/* ── Top-RIGHT toast error ────────────────────────────────────────── */}
-      {toastError && (
-        <div
-          style={{
-            position: "fixed",
-            top: "16px",
-            right: "16px",
-            zIndex: 9999,
-            maxWidth: "400px",
-            backgroundColor: "#1a0a0a",
-            border: "1px solid #c0392b",
-            borderRadius: "8px",
-            padding: "12px 14px",
-            display: "flex",
-            alignItems: "flex-start",
-            gap: "10px",
-            boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-            animation: "fadeSlideIn 0.2s ease",
-          }}
-          role="alert"
-        >
-          <IoAlertCircleOutline
-            size={18}
-            style={{ color: "#e74c3c", flexShrink: 0, marginTop: "1px" }}
-          />
-          <span
-            style={{
-              color: "#f5a8a3",
-              fontSize: "13px",
-              lineHeight: "1.5",
-              flex: 1,
-            }}
-          >
-            {toastError}
-          </span>
+       <aside className="mode-sidebar">
+        {/* <div className="mode-header">
+         <span className="mode-header-title">Inputs &amp; Configuration</span> 
           <button
-            onClick={dismissToast}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              color: "#e74c3c",
-              padding: "0",
-              flexShrink: 0,
-              lineHeight: 1,
-            }}
-            aria-label="Dismiss error"
+            type="button"
+            className="mode-header-action"
+            onClick={handleGenerate}
+            disabled={isRunning}
           >
-            <IoCloseOutline size={16} />
+            <RiRefreshLine className="mode-header-action-icon" />
+            <span>Generate New Instance</span>
           </button>
-        </div>
-      )}
+        </div> */}
 
-      <aside className="mode-sidebar">
-        <div className="sidebar-scroll-area">
-          <div className="sidebar-card">
-            <div className="sidebar-card-header">
-              <div className="header-left">
-                <TbCar className="card-icon" />
-                <label className="sidebar-input-label">Vehicle Type</label>
-              </div>
-            </div>
-
-            <div className="custom-select-wrapper">
+        <div className="mode-body">
+          <div className="mode-field-group">
+            <span className="mode-section-label">Optimization Mode</span>
+            <div className="mode-optimization-toggle">
               <button
-                className="custom-select-trigger"
-                onClick={() => setTypeDropdownOpen((o) => !o)}
-                disabled={isRunning}
+                type="button"
+                className={`mode-optimization-card ${
+                  optimizationMode === "distance"
+                    ? "mode-optimization-card--active"
+                    : ""
+                }`}
+                onClick={() => setOptimizationMode("distance")}
               >
-                <span className="custom-select-selected">
-                  {vehicleType === "two-wheeler" ? (
-                    <>
-                      <TbBike className="option-icon" /> Two-Wheeler
-                    </>
-                  ) : (
-                    <>
-                      <TbTruckDelivery className="option-icon" /> Three-Wheeler
-                    </>
-                  )}
+                <span className="mode-optimization-index">1</span>
+                <RiRouteLine className="mode-optimization-icon" />
+                <span className="mode-optimization-title">
+                  Route Optimization
                 </span>
-                <RiArrowDownSLine
-                  className={`select-chevron${typeDropdownOpen ? " select-chevron--open" : ""}`}
-                />
+                <span className="mode-optimization-subtitle">
+                  Minimize Total Distance
+                </span>
               </button>
 
-              {typeDropdownOpen && (
-                <div className="custom-select-dropdown">
-                  <button
-                    className={`custom-select-option${vehicleType === "two-wheeler" ? " custom-select-option--active" : ""}`}
-                    onClick={() => {
-                      setVehicleType("two-wheeler");
-                      setTypeDropdownOpen(false);
-                      setVehicles((prev) =>
-                        prev.map((v) => {
-                          if (!v.capacity.trim()) return { ...v, error: null };
-                          const num = parseInt(v.capacity, 10);
-                          if (
-                            !isNaN(num) &&
-                            num > MAX_CAPACITY["two-wheeler"]
-                          ) {
-                            return {
-                              ...v,
-                              capacity: String(MAX_CAPACITY["two-wheeler"]),
-                              error: null,
-                              clamped: true,
-                            };
-                          }
-                          return { ...v, error: null };
-                        }),
-                      );
-                    }}
-                  >
-                    <TbBike className="option-icon" />
-                    Two-Wheeler
-                    <span className="option-cap-hint">max cap: 5</span>
-                  </button>
-                  <button
-                    className={`custom-select-option${vehicleType === "three-wheeler" ? " custom-select-option--active" : ""}`}
-                    onClick={() => {
-                      setVehicleType("three-wheeler");
-                      setTypeDropdownOpen(false);
-                      setVehicles((prev) =>
-                        prev.map((v) => {
-                          if (!v.capacity.trim()) return { ...v, error: null };
-                          const num = parseInt(v.capacity, 10);
-                          if (
-                            !isNaN(num) &&
-                            num > MAX_CAPACITY["three-wheeler"]
-                          ) {
-                            return {
-                              ...v,
-                              capacity: String(MAX_CAPACITY["three-wheeler"]),
-                              error: null,
-                              clamped: true,
-                            };
-                          }
-                          return { ...v, error: null };
-                        }),
-                      );
-                    }}
-                  >
-                    <TbTruckDelivery className="option-icon" />
-                    Three-Wheeler
-                    <span className="option-cap-hint">max cap: 20</span>
-                  </button>
-                </div>
+              <button
+                type="button"
+                className={`mode-optimization-card ${
+                  optimizationMode === "riders"
+                    ? "mode-optimization-card--active"
+                    : ""
+                }`}
+                onClick={() => setOptimizationMode("riders")}
+              >
+                <span className="mode-optimization-index">2</span>
+                <RiTeamLine className="mode-optimization-icon" />
+                <span className="mode-optimization-title">
+                  Minimum Riders
+                </span>
+                <span className="mode-optimization-subtitle">
+                  Minimize Number of Riders
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div className="mode-field-group">
+            <span className="mode-section-label">Instance Settings</span>
+
+            <div className="field-group">
+              <div className="mode-field-row">
+                <span className="field-label">Number of Orders</span>
+                <span className="mode-field-hint">
+                  ({ORDERS_MIN} - {ORDERS_MAX})
+                </span>
+              </div>
+              <input
+                type="number"
+                className={`field-input ${errors.orders ? "has-error" : ""}`}
+                value={numOrders}
+                min={ORDERS_MIN}
+                max={ORDERS_MAX}
+                onChange={(e) => setNumOrders(Number(e.target.value) || 0)}
+              />
+              {errors.orders && (
+                <span className="field-error">{errors.orders}</span>
               )}
             </div>
 
-            {/* Max capacity bar */}
-            <div className="vehicle-type-meta">
-              <div className="type-meta-left">
-                <span className="type-meta-label">Max capacity</span>
-                <span className="type-meta-value">{maxCap} units</span>
+            {isRidersMode ? (
+              <div className="field-group">
+                <div className="mode-field-row">
+                  <span className="field-label">Available Time</span>
+                  <span className="mode-field-hint">
+                    ({TIME_MIN} - {TIME_MAX} hours)
+                  </span>
+                </div>
+                <div className="mode-time-row">
+                  <input
+                    type="number"
+                    className={`field-input ${
+                      errors.availableTime ? "has-error" : ""
+                    }`}
+                    value={availableTimeHours}
+                    min={TIME_MIN}
+                    max={TIME_MAX}
+                    onChange={(e) =>
+                      setAvailableTimeHours(Number(e.target.value) || 0)
+                    }
+                  />
+                  <select
+                    className="field-input mode-select mode-time-unit"
+                    value="hours"
+                    disabled
+                  >
+                    <option value="hours">Hours</option>
+                  </select>
+                </div>
+                {errors.availableTime && (
+                  <span className="field-error">{errors.availableTime}</span>
+                )}
               </div>
+            ) : (
+              <div className="field-group">
+                <div className="mode-field-row">
+                  <span className="field-label">Number of Riders</span>
+                  <span className="mode-field-hint">
+                    ({RIDERS_MIN} - {RIDERS_MAX})
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  className={`field-input ${errors.riders ? "has-error" : ""}`}
+                  value={numRiders}
+                  min={RIDERS_MIN}
+                  max={RIDERS_MAX}
+                  onChange={(e) => setNumRiders(Number(e.target.value) || 0)}
+                />
+                {errors.riders && (
+                  <span className="field-error">{errors.riders}</span>
+                )}
+              </div>
+            )}
+
+            <div className="field-group">
+              <span className="field-label">Depot Location</span>
+              <div className="mode-select-wrap">
+                <RiMapPin2Line className="mode-select-icon" />
+                <select className="field-input mode-select" value={0} disabled>
+                  <option value={0}>{DEPOT_LABEL}</option>
+                </select>
+              </div>
+              <span className="mode-field-subtext">
+                {DEPOT_LAT}, {DEPOT_LNG}
+              </span>
             </div>
+
+            {isRidersMode && (
+              <div className="mode-info-banner">
+                <RiInformationLine className="mode-info-banner-icon" />
+                <span>
+                  The system will determine the minimum number of riders
+                  required to complete all deliveries within the available
+                  time.
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* ── Vehicles card ──────────────────────────────────── */}
-          <div className="sidebar-card">
-            <div className="sidebar-card-header">
-              <div className="header-left">
-                <RiTruckLine className="card-icon" />
-                <label className="sidebar-input-label">Vehicles</label>
-                <span className="row-count-badge">{vehicles.length}</span>
-              </div>
-              <button
-                className="btn-add-row"
-                onClick={addVehicle}
-                title="Add vehicle"
-                disabled={isRunning}
-              >
-                <RiAddLine />
-              </button>
-            </div>
-
-            <div className="row-column-labels">
-              <span className="col-label col-label-id">ID</span>
-              <span className="col-label col-label-value">Capacity</span>
-            </div>
-
-            <div className="sidebar-row-list">
-              {vehicles.map((v, idx) => {
-                const isLast = idx === vehicles.length - 1;
-                const parsed = parseInt(v.capacity, 10);
-                const fillPct =
-                  !isNaN(parsed) && parsed > 0
-                    ? Math.min((parsed / maxCap) * 100, 100)
-                    : 0;
-                void fillPct;
-
-                return (
-                  <div className="sidebar-dynamic-row" key={v.id}>
-                    <input
-                      className="sidebar-input sidebar-input-id"
-                      type="number"
-                      value={v.id}
-                      readOnly
-                      disabled
-                    />
-                    <div className="input-with-bar">
-                      <input
-                        ref={isLast ? lastVehicleInputRef : undefined}
-                        className={`sidebar-input sidebar-input-value${v.error ? " sidebar-input--error" : ""}${v.clamped ? " sidebar-input--clamped" : ""}`}
-                        type="number"
-                        placeholder={`1 – ${maxCap}`}
-                        value={v.capacity}
-                        min={1}
-                        max={maxCap}
-                        disabled={isRunning}
-                        onChange={(e) =>
-                          updateVehicleCapacity(v.id, e.target.value)
-                        }
-                        onBlur={() => clampVehicleCapacity(v.id, vehicleType)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            clampVehicleCapacity(v.id, vehicleType);
-                            addVehicle();
-                          }
-                        }}
-                      />
-                      {v.error && (
-                        <span className="field-error-msg">{v.error}</span>
-                      )}
-                    </div>
-                    {vehicles.length > 1 && (
-                      <button
-                        className="btn-remove-row"
-                        onClick={() => removeVehicle(v.id)}
-                        disabled={isRunning}
-                        title="Remove vehicle"
-                      >
-                        <RiSubtractLine />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {capacityHint && <p className="capacity-hint">{capacityHint}</p>}
-          </div>
-
-          {/* ── Pickup card ─────────────────────────────────────── */}
-          <div className="sidebar-card">
-            <div className="sidebar-card-header">
-              <div className="header-left">
-                <TbPackageImport className="card-icon" />
-                <label className="sidebar-input-label">Pickups</label>
-                <span className="row-count-badge">{pickups.length}</span>
-              </div>
-              <button
-                className="btn-add-row"
-                onClick={addPickup}
-                title="Add pickup"
-                disabled={isRunning}
-              >
-                <RiAddLine />
-              </button>
-            </div>
-
-            <div className="row-column-labels">
-              <span className="col-label col-label-id">ID</span>
-              <span className="col-label col-label-value">Load</span>
-            </div>
-
-            <div className="sidebar-row-list">
-              {pickups.map((p, idx) => {
-                const isLast = idx === pickups.length - 1;
-                return (
-                  <div className="sidebar-dynamic-row" key={p.id}>
-                    <input
-                      className="sidebar-input sidebar-input-id"
-                      type="number"
-                      value={p.id}
-                      readOnly
-                      disabled
-                    />
-                    <div className="input-with-error">
-                      <input
-                        ref={isLast ? lastPickupInputRef : undefined}
-                        className={`sidebar-input sidebar-input-value${p.error ? " sidebar-input--error" : ""}`}
-                        type="number"
-                        placeholder="e.g. 2"
-                        value={p.load}
-                        min={0}
-                        disabled={isRunning}
-                        onChange={(e) => updatePickupLoad(p.id, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addPickup();
-                          }
-                        }}
-                      />
-                      {p.error && (
-                        <span className="field-error-msg">{p.error}</span>
-                      )}
-                    </div>
-                    {pickups.length > 1 && (
-                      <button
-                        className="btn-remove-row"
-                        onClick={() => removePickup(p.id)}
-                        disabled={isRunning}
-                        title="Remove pickup"
-                      >
-                        <RiSubtractLine />
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            <p className="depot-hint">
-              Depot (node 0, load = 0) is prepended automatically.
-            </p>
-          </div>
-
-          {formError && (
-            <div className="form-error-banner">
-              <span className="form-error-icon">⚠</span>
-              <span>{formError}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="sidebar-actions">
-          <div className="action-row-top">
-            <button
-              className="btn-action btn-generate"
-              onClick={handleGenerate}
-              disabled={isRunning}
+          {!isRidersMode && (
+            <CollapsibleSection
+              title="Rider Settings"
+              open={riderSettingsOpen}
+              onToggle={() => setRiderSettingsOpen((v) => !v)}
             >
-              <RiFlashlightLine className="btn-icon" />
-              <span>Generate</span>
-            </button>
+              <span className="field-label">Capacity Range (kg)</span>
+              <div className="mode-range-row">
+                <input
+                  type="number"
+                  className="field-input mode-range-input"
+                  value={capacityMin}
+                  min={CAPACITY_FLOOR}
+                  max={capacityMax}
+                  onChange={(e) =>
+                    setCapacityMin(Number(e.target.value) || CAPACITY_FLOOR)
+                  }
+                />
+                <RangeSlider
+                  min={CAPACITY_FLOOR}
+                  max={CAPACITY_CEIL}
+                  valueMin={capacityMin}
+                  valueMax={capacityMax}
+                  onChange={(nextMin, nextMax) => {
+                    setCapacityMin(nextMin);
+                    setCapacityMax(nextMax);
+                  }}
+                />
+                <input
+                  type="number"
+                  className="field-input mode-range-input"
+                  value={capacityMax}
+                  min={capacityMin}
+                  max={CAPACITY_CEIL}
+                  onChange={(e) =>
+                    setCapacityMax(Number(e.target.value) || CAPACITY_CEIL)
+                  }
+                />
+              </div>
+              {errors.capacity && (
+                <span className="field-error">{errors.capacity}</span>
+              )}
+              <span className="mode-field-subtext">
+                Average Capacity: {averageCapacity.toFixed(1)} kg
+              </span>
+            </CollapsibleSection>
+          )}
 
-            <button
-              className={`btn-action btn-upload${uploadedFile ? " btn-upload--active" : ""}`}
-              onClick={() => setUploadModalOpen(true)}
-              disabled={isRunning || isParsing}
-              title={
-                uploadedFile ? uploadedFile.name : "Upload an Excel or CSV file"
+          <CollapsibleSection
+            title="Order Settings"
+            open={orderSettingsOpen}
+            onToggle={() => setOrderSettingsOpen((v) => !v)}
+          >
+            <span className="field-label">Order Weight Range (kg)</span>
+            <div className="mode-range-row">
+              <input
+                type="number"
+                className="field-input mode-range-input"
+                value={loadMin}
+                min={LOAD_FLOOR}
+                max={loadMax}
+                onChange={(e) =>
+                  setLoadMin(Number(e.target.value) || LOAD_FLOOR)
+                }
+              />
+              <RangeSlider
+                min={LOAD_FLOOR}
+                max={LOAD_CEIL}
+                valueMin={loadMin}
+                valueMax={loadMax}
+                onChange={(nextMin, nextMax) => {
+                  setLoadMin(nextMin);
+                  setLoadMax(nextMax);
+                }}
+              />
+              <input
+                type="number"
+                className="field-input mode-range-input"
+                value={loadMax}
+                min={loadMin}
+                max={LOAD_CEIL}
+                onChange={(e) =>
+                  setLoadMax(Number(e.target.value) || LOAD_CEIL)
+                }
+              />
+            </div>
+            {errors.load && (
+              <span className="field-error">{errors.load}</span>
+            )}
+            <span className="mode-field-subtext">
+              Average Weight: {averageLoad.toFixed(1)} kg
+            </span>
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Advanced Settings"
+            open={advancedOpen}
+            onToggle={() => setAdvancedOpen((v) => !v)}
+          >
+            <div className="mode-field-row">
+              <span className="field-label">Distance Type</span>
+              <RiInformationLine
+                className="mode-info-icon"
+                title="Road Distance uses real routing via OSRM. Straight-Line uses haversine distance."
+              />
+            </div>
+            <select
+              className="field-input mode-select"
+              value={distanceType}
+              onChange={(e) =>
+                setDistanceType(e.target.value as "osrm" | "haversine")
               }
             >
-              {uploadedFile ? (
-                <RiAttachment2 className="btn-icon" />
-              ) : (
-                <RiUploadCloud2Line className="btn-icon" />
-              )}
-              <span className="upload-label">
-                {uploadedFile ? uploadedFile.name : "Upload"}
-              </span>
-            </button>
-          </div>
+              <option value="osrm">Road Distance (OSRM)</option>
+              <option value="haversine">Straight-Line (Haversine)</option>
+            </select>
 
+            {isRidersMode && (
+              <div className="mode-field-row mode-toggle-row">
+                <div className="mode-field-row">
+                  <span className="field-label">Traffic Consideration</span>
+                  <RiInformationLine
+                    className="mode-info-icon"
+                    title="Factor live/typical traffic conditions into travel time estimates."
+                  />
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={trafficConsideration}
+                  className={`mode-toggle-switch ${
+                    trafficConsideration ? "mode-toggle-switch--on" : ""
+                  }`}
+                  onClick={() => setTrafficConsideration((v) => !v)}
+                >
+                  <span className="mode-toggle-thumb" />
+                </button>
+              </div>
+            )}
+          </CollapsibleSection>
+        </div>
+
+        <div className="mode-actions">
+          {/* Upload */}
+          {/* <button
+            type="button"
+            className={`btn-action btn-upload${
+              uploadedFile ? " btn-upload--active" : ""
+            }`}
+            onClick={() => setUploadModalOpen(true)}
+            disabled={isRunning || isParsing}
+            title={uploadedFile ? uploadedFile.name : "Upload an Excel or CSV file"}
+          > */}
+            {/* <RiUploadCloud2Line className="btn-icon" />
+            <span>
+              {isParsing
+                ? "Parsing..."
+                : uploadedFile
+                  ? "Uploaded"
+                  : "Upload Excel / CSV"}
+            </span>
+          </button> */}
+
+          {/* Generate */}
           <button
-            className={`btn-run-comparison${!canRun ? " btn-run--disabled" : ""}`}
+            type="button"
+            className="btn-action btn-generate-instance"
+            onClick={handleGenerate}
+            disabled={isRunning}
+          >
+            <RiFlashlightLine className="btn-icon" />
+            <span>Generate Instance</span>
+          </button>
+
+          {/* Run Comparison */}
+          <button
+            type="button"
+            className={`btn-run-comparison${
+              !hasGenerated || isRunning ? " btn-run--disabled" : ""
+            }`}
             onClick={handleRunComparison}
-            disabled={!canRun}
+            disabled={!hasGenerated || isRunning}
           >
             <RiPlayCircleLine className="run-icon" />
-            Run Comparison
+            <span>
+              {isRunning ? "Running Comparison..." : "Optimize (Compare Solvers)"}
+            </span>
           </button>
         </div>
       </aside>
-
-      {/* Keyframe for toast animation */}
-      <style>{`
-        @keyframes fadeSlideIn {
-          from { opacity: 0; transform: translateY(-8px); }
-          to   { opacity: 1; transform: translateY(0);    }
-        }
-      `}</style>
     </>
   );
 }
